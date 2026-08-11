@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Карта фич ИБ‑продукта</title>
+  <link rel="stylesheet" href="styles.css?v=2">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-top">
+        <h1 class="title">KICS — Карта фич</h1>
+        <div class="header-actions">
+          <div class="search-wrap">
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="searchInput" class="search-input" placeholder="Поиск по тегам и тексту…" autocomplete="off">
+            <button id="clearSearch" class="clear-search-btn" style="display:none" title="Очистить">✕</button>
+          </div>
+          <button id="exportBtn" class="btn btn-secondary" title="Экспорт JSON">📥 Экспорт</button>
+          <button id="importBtn" class="btn btn-secondary" title="Импорт JSON">📤 Импорт</button>
+          <button id="resetDemoBtn" class="btn btn-secondary" title="Сброс к демо-данным">🔄 Демо</button>
+          <input type="file" id="importFile" accept=".json" style="display:none">
+        </div>
+      </div>
+    </header>
+
+    <!-- Main canvas -->
+    <div class="main-canvas" id="mainCanvas">
+      <div class="columns-container" id="columnsContainer">
+        <!-- Column headers + card blocks rendered by JS -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal for editing card -->
+  <div class="modal-overlay" id="modalOverlay" style="display:none">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3>Редактировать карточку</h3>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <label>Заголовок</label>
+        <input type="text" id="modalTitle" class="modal-input" placeholder="Название…">
+        <label>Теги (через запятую)</label>
+        <input type="text" id="modalTags" class="modal-input" placeholder="MVP, security, v2.0…">
+        <label>Комментарий</label>
+        <textarea id="modalNote" class="modal-textarea" rows="3" placeholder="Детали…"></textarea>
+        <label>Статус</label>
+        <select id="modalStatus" class="modal-select">
+          <option value="none">Не начато</option>
+          <option value="planned">Запланировано</option>
+          <option value="wip">В работе</option>
+          <option value="done">Реализовано</option>
+        </select>
+        <label>Срок / Квартал</label>
+        <div class="quarter-picker" id="modalQuarterPicker">
+          <select id="modalQuarter" class="modal-select quarter-select">
+            <option value="">—</option>
+            <option value="Q1">Q1</option>
+            <option value="Q2">Q2</option>
+            <option value="Q3">Q3</option>
+            <option value="Q4">Q4</option>
+          </select>
+          <select id="modalYear" class="modal-select year-select">
+            <option value="">—</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="modalDelete" class="btn btn-danger">🗑 Удалить</button>
+        <button id="modalSave" class="btn btn-primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=2"></script>
+</body>
+</html>
