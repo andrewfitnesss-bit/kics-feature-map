@@ -90,7 +90,25 @@ function buildDemoState() {
 }
 
 // ──────────────────────────────────────
-// 5. Облачное сохранение (debounced)
+// 5. Видимая ошибка на экране
+// ──────────────────────────────────────
+let errorBannerTimer = null;
+function showError(msg) {
+  var b = document.getElementById('errorBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'errorBanner';
+    b.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);background:#ff3b30;color:#fff;padding:10px 18px;border-radius:10px;z-index:3000;font-size:13px;max-width:85%;box-shadow:0 4px 12px rgba(0,0,0,.25);cursor:pointer;line-height:1.4;';
+    b.onclick = function () { b.remove(); };
+    document.body.appendChild(b);
+  }
+  b.textContent = 'Ошибка: ' + msg;
+  clearTimeout(errorBannerTimer);
+  errorBannerTimer = setTimeout(function () { if (b.parentNode) b.remove(); }, 8000);
+}
+
+// ──────────────────────────────────────
+// 6. Облачное сохранение (debounced)
 // ──────────────────────────────────────
 let saveTimer = null;
 function scheduleSave() {
@@ -107,8 +125,8 @@ async function saveMapRemote() {
       data: { columns: state.columns, nodes: state.nodes, nextId },
       updated_at: new Date().toISOString()
     }).eq('id', state.mapId);
-    if (error) { console.error('Ошибка сохранения:', error); }
-  } catch (e) { console.error('Исключение при сохранении:', e); }
+    if (error) { console.error('Ошибка сохранения:', error); showError('не удалось сохранить: ' + error.message); }
+  } catch (e) { console.error('Исключение при сохранении:', e); showError('сбой сети при сохранении'); }
 }
 
 // ──────────────────────────────────────
@@ -184,6 +202,7 @@ async function createNewMap() {
 
   if (error) {
     console.error('Ошибка создания карты:', error.message, error.details, error.hint);
+    showError('не удалось создать карту: ' + error.message + (error.details ? ' — ' + error.details : ''));
     return;
   }
 
