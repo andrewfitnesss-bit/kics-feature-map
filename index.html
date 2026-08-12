@@ -7,9 +7,33 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Карта фич ИБ‑продукта</title>
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
+  <!-- Supabase JS (v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+
+  <!-- Auth screen -->
+  <div id="authScreen" class="auth-screen" style="display:none">
+    <div class="auth-card">
+      <h1 class="auth-title">KICS — Карта фич</h1>
+      <p class="auth-subtitle">Войди или создай аккаунт, чтобы сохранять свои таблицы в облаке</p>
+      <form id="authForm" class="auth-form">
+        <label>Email</label>
+        <input type="email" id="authEmail" name="email" class="auth-input" placeholder="you@example.com" autocomplete="username" required>
+        <label>Пароль</label>
+        <input type="password" id="authPassword" name="password" class="auth-input" placeholder="Минимум 6 символов" minlength="6" autocomplete="current-password" required>
+        <button type="submit" id="authSubmit" class="btn btn-primary auth-submit">Войти</button>
+      </form>
+      <div class="auth-toggle">
+        <span id="authToggleText">Нет аккаунта?</span>
+        <button id="authToggleBtn" class="btn btn-secondary btn-sm">Зарегистрироваться</button>
+      </div>
+      <div id="authError" class="auth-error" style="display:none"></div>
+    </div>
+  </div>
+
   <div id="app">
     <!-- Header -->
     <header class="header">
@@ -25,6 +49,11 @@
           <button id="importBtn" class="btn btn-secondary" title="Импорт JSON">📤 Импорт</button>
           <button id="resetDemoBtn" class="btn btn-secondary" title="Сброс к демо-данным">🔄 Демо</button>
           <input type="file" id="importFile" accept=".json" style="display:none">
+          <button id="shareBtn" class="btn btn-secondary" title="Поделиться">🔗 Поделиться</button>
+          <div class="user-chip" id="userChip">
+            <span id="userEmail" class="user-email"></span>
+            <button id="logoutBtn" class="btn btn-secondary btn-sm" title="Выйти">Выйти</button>
+          </div>
         </div>
       </div>
     </header>
@@ -80,6 +109,33 @@
     </div>
   </div>
 
-  <script src="app.js?v=2"></script>
+  <!-- Share modal -->
+  <div class="modal-overlay" id="shareOverlay" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Поделиться таблицей</h3>
+        <button class="modal-close" id="shareClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="share-hint">Приглашённый пользователь сможет открыть таблицу после входа.</p>
+        <label>Email</label>
+        <input type="email" id="shareEmail" class="modal-input" placeholder="colleague@example.com">
+        <label>Роль</label>
+        <select id="shareRole" class="modal-select">
+          <option value="viewer">Просмотр</option>
+          <option value="editor">Редактирование</option>
+        </select>
+        <button id="shareAddBtn" class="btn btn-primary">Добавить доступ</button>
+        <hr class="share-divider">
+        <h4 class="share-list-title">Кто имеет доступ</h4>
+        <div id="shareList" class="share-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="shareDone" class="btn btn-primary">Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=3"></script>
 </body>
 </html>

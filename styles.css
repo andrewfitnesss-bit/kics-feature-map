@@ -70,6 +70,164 @@ body {
 .btn-danger { background:transparent; color:var(--red); }
 .btn-danger:hover { background:var(--red-light); }
 
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+.user-email {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Share modal helpers */
+.share-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.share-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+.share-list-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.share-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.share-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.share-item-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-item-role {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.share-item-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--red);
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.share-item-remove:hover {
+  background: var(--red-light);
+}
+
+/* ---- Auth screen ---- */
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 380px;
+  max-width: 92vw;
+  padding: 32px 28px;
+}
+.auth-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  text-align: center;
+}
+.auth-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 6px;
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.auth-form label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.auth-input {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  transition: all var(--transition);
+}
+.auth-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+.auth-submit {
+  margin-top: 6px;
+  padding: 12px;
+  font-size: 15px;
+}
+.auth-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.auth-error {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--red-light);
+  color: var(--red);
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: center;
+}
+
 /* ---- Main canvas ---- */
 .main-canvas { flex:1; overflow:auto; position:relative; padding:16px 24px 60px; }
 .columns-container { display:flex; flex-direction:column; min-width:max-content; position:relative; z-index:1; }
