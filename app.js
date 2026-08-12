@@ -395,7 +395,7 @@ function renderColumns() {
       sp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); sp.blur(); } });
     }
     var ha = document.createElement('div'); ha.className = 'column-header-actions';
-    if (i === 0 && isOwner) { var btn = document.createElement('button'); btn.className = 'column-header-btn'; btn.textContent = '+'; btn.addEventListener('click', function (e) { e.stopPropagation(); var n = createNode(null, 0, 'Новая область'); state.nodes.push(n); rebuildChildren(); scheduleSave(); render(); openModal(n.id); }); ha.appendChild(btn); }
+    if (isOwner) { var btn = document.createElement('button'); btn.className = 'column-header-btn'; btn.textContent = '+'; btn.title = 'Добавить карточку в эту колонку'; btn.addEventListener('click', function (e) { e.stopPropagation(); var n; if (i === 0) { n = createNode(null, 0, 'Новая карточка'); } else { var parents = getNodesByCol(i - 1); if (parents.length === 0) { alert('Сначала создай карточку в колонке «' + state.columns[i - 1].name + '»'); return; } var parent = parents[parents.length - 1]; n = createNode(parent.id, i, 'Новая карточка'); } state.nodes.push(n); rebuildChildren(); scheduleSave(); render(); openModal(n.id); }); ha.appendChild(btn); }
     h.appendChild(ha); hr.appendChild(h);
   });
   c.appendChild(hr);
