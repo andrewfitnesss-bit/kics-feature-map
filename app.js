@@ -194,11 +194,11 @@ async function createNewMap() {
     buildDemoState();
   }
 
-  let { data, error } = await sb.from('maps').insert({
+  let { error } = await sb.from('maps').insert({
     owner_id: currentUser.id,
     title: 'Моя карта фич',
     data: { columns: state.columns, nodes: state.nodes, nextId }
-  }).select('id').single();
+  });
 
   if (error) {
     console.error('Ошибка создания карты:', error.message, error.details, error.hint);
@@ -206,13 +206,24 @@ async function createNewMap() {
     return;
   }
 
-  if (data && data.id) {
-    state.mapId = data.id;
-    isOwner = true;
-    try { localStorage.removeItem(LS_KEY); } catch (e) {}
-    // Сразу сохраняем вставленные данные
-    await saveMapRemote();
+  // Читаем id созданной карты отдельным запросом
+  let { data: created, error: readErr } = await sb
+    .from('maps')
+    .select('id')
+    .eq('owner_id', currentUser.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (readErr || !created) {
+    showError('карта создана, но не удалось прочитать её id — обнови страницу');
+    return;
   }
+
+  state.mapId = created.id;
+  isOwner = true;
+  try { localStorage.removeItem(LS_KEY); } catch (e) {}
+  render();
 }
 
 // ──────────────────────────────────────
