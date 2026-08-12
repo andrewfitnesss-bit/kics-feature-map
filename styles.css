@@ -236,8 +236,16 @@ body {
 .columns-headers { position:relative; padding:0 10px 6px; height:36px; z-index:2; }
 .column-header { position:absolute; top:0; left:0; width:260px; height:30px; line-height:30px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-secondary); padding:0 12px; border-bottom:2px solid var(--accent); display:flex; align-items:center; justify-content:space-between; background:var(--bg); }
 .column-header-actions { display:flex; gap:4px; }
-.column-header-btn { background:none; border:none; cursor:pointer; color:var(--text-tertiary); font-size:14px; padding:2px 4px; border-radius:4px; transition:all var(--transition); }
+.column-header-btn { background:none; border:none; cursor:pointer; color:var(--text-tertiary); font-size:18px; padding:4px 8px; border-radius:8px; transition:all var(--transition); line-height:1; }
 .column-header-btn:hover { color:var(--accent); background:var(--accent-light); }
+
+/* Название доски — клик для редактирования */
+.title[contenteditable="true"] { outline:none; border-bottom:1px dashed var(--accent); cursor:text; min-width:200px; }
+.title:hover { cursor:pointer; }
+
+/* Название колонки — клик для редактирования */
+.column-header span[contenteditable="true"] { outline:none; border-bottom:1px dashed var(--accent); cursor:text; }
+.column-header span:hover { cursor:pointer; }
 
 /* ---- Content area ---- */
 .column--content { display:flex; flex-direction:column; gap:10px; padding:4px 10px 0; }
@@ -273,7 +281,7 @@ body {
 
 .card-actions { position:absolute; top:8px; right:8px; display:flex; gap:2px; opacity:0; transition:opacity var(--transition); }
 .card:hover .card-actions { opacity:1; }
-.card-action-btn { background:var(--surface); border:1px solid var(--border); cursor:pointer; width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--text-secondary); transition:all var(--transition); }
+.card-action-btn { background:var(--surface); border:1px solid var(--border); cursor:pointer; width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--text-secondary); transition:all var(--transition); }
 .card-action-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
 .card-action-btn.danger:hover { background:var(--red); color:#fff; border-color:var(--red); }
 

@@ -28,6 +28,7 @@ let state = {
   searchQuery: '',
   editingNodeId: null,
   mapId: null,
+  boardTitle: 'KICS — Карта фич',
 };
 let nextId = 1;
 function nid() { return 'n' + (nextId++); }
@@ -122,6 +123,7 @@ async function saveMapRemote() {
   if (!sb || !state.mapId) return;
   try {
     const { error } = await sb.from('maps').update({
+      title: state.boardTitle,
       data: { columns: state.columns, nodes: state.nodes, nextId },
       updated_at: new Date().toISOString()
     }).eq('id', state.mapId);
@@ -160,6 +162,7 @@ async function loadOrCreateMap() {
 function applyMap(map, ownerFlag) {
   isOwner = ownerFlag;
   state.mapId = map.id;
+  state.boardTitle = map.title || 'KICS — Карта фич';
   var raw = map.data || {};
   state.columns = raw.columns && raw.columns.length ? raw.columns : defaultColumns();
   state.nodes = raw.nodes || [];
@@ -196,7 +199,7 @@ async function createNewMap() {
 
   let { error } = await sb.from('maps').insert({
     owner_id: currentUser.id,
-    title: 'Моя карта фич',
+    title: state.boardTitle || 'Моя карта фич',
     data: { columns: state.columns, nodes: state.nodes, nextId }
   });
 
@@ -366,14 +369,31 @@ async function removeShare(id) {
 // ──────────────────────────────────────
 // 9. Render
 // ──────────────────────────────────────
-function render() { renderColumns(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); }); }
+function render() {
+  var t = document.getElementById('boardTitle');
+  if (t && t.textContent !== state.boardTitle) t.textContent = state.boardTitle;
+  renderColumns();
+  requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
+}
 
 function renderColumns() {
   var c = $('#columnsContainer'); c.innerHTML = '';
   var hr = document.createElement('div'); hr.className = 'columns-headers';
   state.columns.forEach(function (col, i) {
     var h = document.createElement('div'); h.className = 'column-header';
-    h.innerHTML = '<span>' + eh(col.name) + '</span>';
+    var sp = document.createElement('span');
+    sp.textContent = col.name;
+    sp.title = 'Нажми, чтобы переименовать';
+    h.appendChild(sp);
+    if (isOwner) {
+      sp.contentEditable = 'true';
+      sp.addEventListener('blur', function () {
+        var v = sp.textContent.trim();
+        if (v) { col.name = v; scheduleSave(); }
+        else { sp.textContent = col.name; }
+      });
+      sp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); sp.blur(); } });
+    }
     var ha = document.createElement('div'); ha.className = 'column-header-actions';
     if (i === 0 && isOwner) { var btn = document.createElement('button'); btn.className = 'column-header-btn'; btn.textContent = '+'; btn.addEventListener('click', function (e) { e.stopPropagation(); var n = createNode(null, 0, 'Новая область'); state.nodes.push(n); rebuildChildren(); scheduleSave(); render(); openModal(n.id); }); ha.appendChild(btn); }
     h.appendChild(ha); hr.appendChild(h);
@@ -510,7 +530,8 @@ function saveModal() {
   n.title = $('#modalTitle').value.trim();
   n.tags = $('#modalTags').value.split(',').map(function (t) { return t.trim().toLowerCase(); }).filter(function (t) { return t; });
   n.note = $('#modalNote').value.trim(); n.status = $('#modalStatus').value;
-  var y = $('#modalYear').value, q = $('#modalQuarter').value; n.dueDate = y && q ? y + ' ' + q : '';
+  var y = $('#modalYear').value, q = $('#modalQuarter').value;
+  n.dueDate = (q === 'Now' || q === 'Next' || q === 'Later') ? q : ((y && q) ? (y + ' ' + q) : '');
   closeModal(); scheduleSave(); updateCards(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
 }
 
@@ -522,8 +543,12 @@ function openModal(id) {
   var n = getNodeById(id); if (!n || !isOwner) return;
   state.editingNodeId = id; $('#modalTitle').value = n.title; $('#modalTags').value = n.tags.join(', ');
   $('#modalNote').value = n.note; $('#modalStatus').value = n.status; populateYearSelect();
-  var m = n.dueDate.match(/^(\d{4})\s+(Q[1-4])$/);
-  if (m) { $('#modalYear').value = m[1]; $('#modalQuarter').value = m[2]; } else { $('#modalYear').value = ''; $('#modalQuarter').value = ''; }
+  if (n.dueDate === 'Now' || n.dueDate === 'Next' || n.dueDate === 'Later') {
+    $('#modalYear').value = ''; $('#modalQuarter').value = n.dueDate;
+  } else {
+    var m = n.dueDate.match(/^(\d{4})\s+(Q[1-4])$/);
+    if (m) { $('#modalYear').value = m[1]; $('#modalQuarter').value = m[2]; } else { $('#modalYear').value = ''; $('#modalQuarter').value = ''; }
+  }
   $('#modalOverlay').style.display = 'flex';
 }
 function closeModal() { $('#modalOverlay').style.display = 'none'; state.editingNodeId = null; }
@@ -542,6 +567,22 @@ function initEvents() {
   $('#shareClose').addEventListener('click', function () { $('#shareOverlay').style.display = 'none'; });
   $('#shareDone').addEventListener('click', function () { $('#shareOverlay').style.display = 'none'; });
   $('#shareAddBtn').addEventListener('click', addShare);
+
+  // Board title rename
+  var bt = document.getElementById('boardTitle');
+  if (bt && isOwner) {
+    bt.title = 'Нажми, чтобы переименовать доску';
+    bt.addEventListener('click', function () { bt.contentEditable = 'true'; bt.focus(); });
+    bt.addEventListener('blur', function () {
+      bt.contentEditable = 'false';
+      var v = bt.textContent.trim();
+      if (!v) { bt.textContent = state.boardTitle; return; }
+      state.boardTitle = v;
+      bt.textContent = v;
+      scheduleSave();
+    });
+    bt.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); bt.blur(); } });
+  }
 
   // Logout
   $('#logoutBtn').addEventListener('click', async function () { await sb.auth.signOut(); location.reload(); });
