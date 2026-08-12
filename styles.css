@@ -281,6 +281,38 @@ body {
 
 .card-actions { position:absolute; top:8px; right:8px; display:flex; gap:2px; opacity:0; transition:opacity var(--transition); }
 .card:hover .card-actions { opacity:1; }
+
+/* Быстрые действия на карточке */
+.card-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  align-items: center;
+}
+.card-quick .quick-status,
+.card-quick .quick-due {
+  font-size: 12px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  outline: none;
+}
+.card-quick .quick-status:hover,
+.card-quick .quick-due:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Теги с крестиком для быстрого удаления */
+.card-tag.quick-removable {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.card-tag.quick-removable:hover { background: var(--red-light); color: var(--red); }
+.card-tag .tag-x { font-weight: 700; opacity: 0.7; }
 .card-action-btn { background:var(--surface); border:1px solid var(--border); cursor:pointer; width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--text-secondary); transition:all var(--transition); }
 .card-action-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
 .card-action-btn.danger:hover { background:var(--red); color:#fff; border-color:var(--red); }

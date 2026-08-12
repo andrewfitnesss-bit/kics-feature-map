@@ -443,11 +443,48 @@ function createCardElement(node) {
     card.appendChild(ac);
   }
   var t = document.createElement('div'); t.className = 'card-title'; t.innerHTML = ht(node.title || 'Без названия'); card.appendChild(t);
+
+  // Быстрые действия (только для владельца)
+  if (isOwner) {
+    var q = document.createElement('div'); q.className = 'card-quick';
+
+    // Статус
+    var qs = document.createElement('select'); qs.className = 'quick-status';
+    ['none','planned','wip','done'].forEach(function (s) {
+      var o = document.createElement('option'); o.value = s; o.textContent = SL[s]; if (node.status === s) o.selected = true; qs.appendChild(o);
+    });
+    qs.addEventListener('change', function () { node.status = qs.value; scheduleSave(); });
+    qs.addEventListener('click', function (e) { e.stopPropagation(); });
+    q.appendChild(qs);
+
+    // Срок (быстрый)
+    var qd = document.createElement('select'); qd.className = 'quick-due';
+    var dueOpts = ['','Now','Next','Later','Q1','Q2','Q3','Q4'];
+    dueOpts.forEach(function (dv) {
+      var o = document.createElement('option'); o.value = dv;
+      o.textContent = dv === '' ? 'срок' : dv;
+      // показать текущее значение
+      var cur = node.dueDate;
+      if ((dv === '' && !cur) || (dv === cur) || (cur && cur.indexOf(dv) !== -1 && dv.indexOf('Q') === 0)) o.selected = true;
+      qd.appendChild(o);
+    });
+    qd.addEventListener('change', function () {
+      if (qd.value === '') { node.dueDate = ''; }
+      else if (qd.value.indexOf('Q') === 0) { var y = prompt('Год (например 2026):', new Date().getFullYear()); if (y) { node.dueDate = y + ' ' + qd.value; } }
+      else { node.dueDate = qd.value; }
+      scheduleSave(); updateCards(); syncHeights(); alignHeaders();
+    });
+    qd.addEventListener('click', function (e) { e.stopPropagation(); });
+    q.appendChild(qd);
+
+    card.appendChild(q);
+  }
+
   var m = document.createElement('div'); m.className = 'card-meta';
   var sb = document.createElement('span'); sb.className = 'status-badge ' + SC[node.status]; sb.innerHTML = '<span class="status-dot ' + SD[node.status] + '"></span>' + SL[node.status]; m.appendChild(sb);
   if (node.dueDate) { var ds = document.createElement('span'); ds.style.cssText = 'font-size:11px;color:var(--text-secondary)'; ds.textContent = node.dueDate; m.appendChild(ds); }
   card.appendChild(m);
-  if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag'; ts.innerHTML = ht(tg); td.appendChild(ts); }); card.appendChild(td); }
+  if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag' + (isOwner ? ' quick-removable' : ''); if (isOwner) { ts.innerHTML = ht(tg) + ' <span class="tag-x">\u00d7</span>'; ts.addEventListener('click', function (e) { e.stopPropagation(); node.tags = node.tags.filter(function (x) { return x !== tg; }); scheduleSave(); updateCards(); syncHeights(); alignHeaders(); }); } else { ts.innerHTML = ht(tg); } td.appendChild(ts); }); card.appendChild(td); }
   if (node.note) { var h = document.createElement('div'); h.className = 'card-hint'; h.textContent = node.note.length > 80 ? node.note.substring(0, 80) + '\u2026' : node.note; card.appendChild(h); }
   if (isOwner) card.addEventListener('click', function () { openModal(node.id); });
   return card;
