@@ -29,6 +29,7 @@ let state = {
   editingNodeId: null,
   mapId: null,
   boardTitle: 'KICS — Карта фич',
+  maps: [],
 };
 let nextId = 1;
 function nid() { return 'n' + (nextId++); }
@@ -134,29 +135,130 @@ async function saveMapRemote() {
 // ──────────────────────────────────────
 // 6. Загрузка карты из облака
 // ──────────────────────────────────────
-async function loadOrCreateMap() {
+async function loadMaps() {
   if (!sb || !currentUser) return;
 
-  // Пытаемся найти собственную карту
-  let { data, error } = await sb.from('maps').select('*').eq('owner_id', currentUser.id).order('created_at', { ascending: false }).limit(1);
+  // Свои карты
+  let { data: owned } = await sb.from('maps').select('id,title,owner_id').eq('owner_id', currentUser.id).order('created_at', { ascending: false });
 
-  if (!error && data && data.length > 0) {
-    applyMap(data[0], true);
+  // Карты, к которым есть доступ (шаринг)
+  let { data: shares } = await sb.from('map_shares').select('map_id,email').eq('email', currentUser.email.toLowerCase());
+  var sharedIds = (shares || []).map(function (r) { return r.map_id; });
+  var sharedMaps = [];
+  if (sharedIds.length) {
+    let { data: sm } = await sb.from('maps').select('id,title,owner_id').in('id', sharedIds);
+    if (sm) sharedMaps = sm;
+  }
+
+  state.maps = (owned || []).map(function (m) { return { id: m.id, title: m.title, owner_id: m.owner_id, is_owner: true }; })
+    .concat((sharedMaps || []).map(function (m) { return { id: m.id, title: m.title, owner_id: m.owner_id, is_owner: false }; }));
+
+  if (state.maps.length === 0) {
+    await createFirstMap();
     return;
   }
 
-  // Иначе — карту, к которой есть доступ (шаринг)
-  let shared = await sb.from('map_shares').select('map_id').eq('email', currentUser.email.toLowerCase());
-  if (!shared.error && shared.data && shared.data.length > 0) {
-    let { data: mapData, error: mapErr } = await sb.from('maps').select('*').eq('id', shared.data[0].map_id).limit(1);
-    if (!mapErr && mapData && mapData.length > 0) {
-      applyMap(mapData[0], false);
-      return;
-    }
-  }
+  var preferred = state.maps.find(function (m) { return m.is_owner; }) || state.maps[0];
+  await loadMap(preferred.id);
+}
 
-  // Не нашли — создаём новую карту + импортируем старые данные из localStorage (если есть)
-  await createNewMap();
+async function loadMap(mapId) {
+  var meta = state.maps.find(function (m) { return m.id === mapId; });
+  if (!meta) return;
+  var { data, error } = await sb.from('maps').select('*').eq('id', mapId).maybeSingle();
+  if (error || !data) { showError('не удалось загрузить таблицу'); return; }
+  applyMap(data, !!meta.is_owner);
+  renderMapSelector();
+  render();
+}
+
+async function createFirstMap() {
+  // Миграция старых данных из localStorage
+  let importData = null;
+  try { var raw = localStorage.getItem(LS_KEY); if (raw) importData = JSON.parse(raw); } catch (e) {}
+  if (importData && importData.nodes && importData.nodes.length) {
+    state.columns = importData.columns && importData.columns.length ? importData.columns : defaultColumns();
+    state.nodes = importData.nodes;
+    nextId = importData.nextId || 1;
+    rebuildChildren();
+  } else {
+    buildDemoState();
+  }
+  var id = await insertMap('Моя карта фич');
+  if (!id) return;
+  state.mapId = id;
+  try { localStorage.removeItem(LS_KEY); } catch (e) {}
+  renderMapSelector();
+  render();
+}
+
+async function insertMap(title) {
+  var { data, error } = await sb.from('maps').insert({
+    owner_id: currentUser.id,
+    title: title,
+    data: { columns: state.columns, nodes: state.nodes, nextId }
+  }).select('id,title,owner_id').single();
+  if (error || !data) {
+    var { data: created } = await sb.from('maps').select('id,title,owner_id').eq('owner_id', currentUser.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!created) { showError('не удалось создать таблицу: ' + (error ? error.message : '?')); return null; }
+    data = created;
+  }
+  state.maps.unshift({ id: data.id, title: data.title, owner_id: data.owner_id, is_owner: true });
+  return data.id;
+}
+
+async function newMap() {
+  var title = prompt('Название таблицы:', 'Новая таблица');
+  if (title === null) return;
+  title = title.trim() || 'Новая таблица';
+  buildDemoState();
+  var id = await insertMap(title);
+  if (!id) return;
+  state.mapId = id;
+  state.boardTitle = title;
+  isOwner = true;
+  renderMapSelector();
+  render();
+}
+
+async function deleteMap() {
+  if (!isOwner) { alert('Удалять может только владелец таблицы'); return; }
+  var cur = state.maps.find(function (m) { return m.id === state.mapId; });
+  if (!confirm('Удалить таблицу «' + (cur ? cur.title : state.boardTitle) + '»? Это действие необратимо.')) return;
+  var { error } = await sb.from('maps').delete().eq('id', state.mapId);
+  if (error) { showError('не удалось удалить: ' + error.message); return; }
+  state.maps = state.maps.filter(function (m) { return m.id !== state.mapId; });
+  if (state.maps.length === 0) {
+    buildDemoState();
+    var id = await insertMap('Моя карта фич');
+    if (!id) return;
+    state.mapId = id;
+    state.boardTitle = 'Моя карта фич';
+    isOwner = true;
+    renderMapSelector();
+    render();
+    return;
+  }
+  await loadMap(state.maps[0].id);
+}
+
+async function selectMap(mapId) {
+  await loadMap(mapId);
+}
+
+function renderMapSelector() {
+  var sel = document.getElementById('mapSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  state.maps.forEach(function (m) {
+    var o = document.createElement('option');
+    o.value = m.id;
+    o.textContent = m.is_owner ? m.title : m.title + ' (общая)';
+    if (m.id === state.mapId) o.selected = true;
+    sel.appendChild(o);
+  });
+  var delBtn = document.getElementById('deleteMapBtn');
+  if (delBtn) delBtn.style.display = isOwner ? 'flex' : 'none';
 }
 
 function applyMap(map, ownerFlag) {
@@ -317,8 +419,7 @@ async function afterLogin() {
   $('#userEmail').textContent = currentUser.email;
   showApp();
   try {
-    await loadOrCreateMap();
-    render();
+    await loadMaps();
   } catch (e) {
     buildDemoState();
     render();
@@ -604,6 +705,14 @@ function initEvents() {
   $('#shareClose').addEventListener('click', function () { $('#shareOverlay').style.display = 'none'; });
   $('#shareDone').addEventListener('click', function () { $('#shareOverlay').style.display = 'none'; });
   $('#shareAddBtn').addEventListener('click', addShare);
+
+  // Map selector
+  var mapSel = document.getElementById('mapSelect');
+  if (mapSel) mapSel.addEventListener('change', function () { selectMap(mapSel.value); });
+  var newMapBtn = document.getElementById('newMapBtn');
+  if (newMapBtn) newMapBtn.addEventListener('click', function () { newMap(); });
+  var delMapBtn = document.getElementById('deleteMapBtn');
+  if (delMapBtn) delMapBtn.addEventListener('click', function () { deleteMap(); });
 
   // Board title rename
   var bt = document.getElementById('boardTitle');
