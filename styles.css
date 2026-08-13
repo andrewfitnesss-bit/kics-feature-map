@@ -397,8 +397,38 @@ body {
 .card-tag { font-size:10px; font-weight:500; padding:1px 7px; border-radius:10px; background:var(--accent-light); color:var(--accent); white-space:nowrap; }
 .card-hint { font-size:11px; color:var(--text-tertiary); }
 
-.card-actions { position:absolute; top:8px; right:8px; display:flex; gap:2px; opacity:0; transition:opacity var(--transition); }
-.card:hover .card-actions { opacity:1; }
+.card-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.card:hover .card-footer { opacity: 1; }
+
+.card-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.quick-control {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition);
+  max-width: 110px;
+}
+.quick-control:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Теги — кликабельные, при наведении подсвечиваются */
 .card-tag { cursor: pointer; }
