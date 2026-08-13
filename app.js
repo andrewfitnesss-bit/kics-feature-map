@@ -193,18 +193,27 @@ async function createFirstMap() {
 }
 
 async function insertMap(title) {
-  var { data, error } = await sb.from('maps').insert({
+  // Вставка без select/single, чтобы не падать на ошибке PGRST116
+  var { error } = await sb.from('maps').insert({
     owner_id: currentUser.id,
     title: title,
     data: { columns: state.columns, nodes: state.nodes, nextId }
-  }).select('id,title,owner_id').single();
-  if (error || !data) {
-    var { data: created } = await sb.from('maps').select('id,title,owner_id').eq('owner_id', currentUser.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (!created) { showError('не удалось создать таблицу: ' + (error ? error.message : '?')); return null; }
-    data = created;
-  }
-  state.maps.unshift({ id: data.id, title: data.title, owner_id: data.owner_id, is_owner: true });
-  return data.id;
+  });
+  if (error) { console.error('insert error:', error); showError('не удалось создать таблицу: ' + error.message); return null; }
+
+  // Читаем id только что созданной записи
+  var { data: created, error: readErr } = await sb
+    .from('maps')
+    .select('id,title,owner_id')
+    .eq('owner_id', currentUser.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (readErr) { console.error('read error:', readErr); showError('не удалось прочитать таблицу: ' + readErr.message); return null; }
+  if (!created) { showError('таблица создана, но не прочиталась'); return null; }
+
+  state.maps.unshift({ id: created.id, title: created.title, owner_id: created.owner_id, is_owner: true });
+  return created.id;
 }
 
 async function newMap() {
