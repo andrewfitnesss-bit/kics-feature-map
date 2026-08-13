@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v28';
+const APP_VERSION = 'v29';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -31,6 +31,8 @@ let state = {
   mapId: null,
   boardTitle: 'KICS — Карта фич',
   maps: [],
+  availableTags: [],
+  filterTag: null,
 };
 let nextId = 1;
 function nid() { return 'n' + (nextId++); }
@@ -59,7 +61,40 @@ function nodeMatchesFilter(node) {
 }
 function isNodeOrDescendantVisible(node) { if (nodeMatchesFilter(node)) return true; for (var i = 0; i < (node.children || []).length; i++) { var c = getNodeById(node.children[i]); if (c && isNodeOrDescendantVisible(c)) return true; } return false; }
 function hasAnyFilter() { if (state.searchQuery) return true; for (var k in state.selectedTags) { if (state.selectedTags[k] && state.selectedTags[k].size > 0) return true; } return false; }
-function getAllTags() { var s = {}; state.nodes.forEach(function (n) { (n.tags || []).forEach(function (t) { s[t] = 1; }); }); return Object.keys(s).sort(); }
+function getAllTags() { return (state.availableTags || []).slice().sort(); }
+
+// Вычисляем множество видимых при фильтре-хаштеге: тег-узел + родители + дети
+function computeFilterVisibleSet(tag) {
+  var set = {};
+  function markAncestors(id) {
+    var cur = getNodeById(id);
+    while (cur) {
+      set[cur.id] = true;
+      cur = cur.parentId ? getNodeById(cur.parentId) : null;
+    }
+  }
+  function markDescendants(id) {
+    set[id] = true;
+    getChildren(id).forEach(function (c) { markDescendants(c.id); });
+  }
+  state.nodes.forEach(function (n) {
+    if (n.tags && n.tags.indexOf(tag) !== -1) {
+      markAncestors(n.id);
+      markDescendants(n.id);
+    }
+  });
+  return set;
+}
+
+function isNodeVisible(node) {
+  if (state.filterTag) {
+    return state.filterVisibleSet && state.filterVisibleSet[node.id] === true;
+  }
+  if (hasAnyFilter()) {
+    return isNodeOrDescendantVisible(node);
+  }
+  return true;
+}
 
 var $ = function (s) { return document.querySelector(s); }, $$ = function (s) { return document.querySelectorAll(s); };
 var SL = { done: 'Реализовано', wip: 'В работе', planned: 'Запланировано', none: 'Не начато' };
@@ -129,7 +164,7 @@ async function saveMapRemote() {
   try {
     const { error } = await sb.from('maps').update({
       title: state.boardTitle,
-      data: { columns: state.columns, nodes: state.nodes, nextId },
+      data: { columns: state.columns, nodes: state.nodes, nextId: nextId, availableTags: state.availableTags },
       updated_at: new Date().toISOString()
     }).eq('id', state.mapId);
     if (error) { console.error('Ошибка сохранения:', error); showError('не удалось сохранить: ' + error.message); }
@@ -201,7 +236,7 @@ async function insertMap(title) {
   var { error } = await sb.from('maps').insert({
     owner_id: currentUser.id,
     title: title,
-    data: { columns: state.columns, nodes: state.nodes, nextId }
+    data: { columns: state.columns, nodes: state.nodes, nextId: nextId, availableTags: state.availableTags }
   });
   if (error) { console.error('insert error:', error); showError('не удалось создать таблицу: ' + error.message); return null; }
 
@@ -355,6 +390,9 @@ function applyMap(map, ownerFlag) {
   state.columns = raw.columns && raw.columns.length ? raw.columns : defaultColumns();
   state.nodes = raw.nodes || [];
   nextId = raw.nextId || 1;
+  state.availableTags = raw.availableTags || [];
+  state.filterTag = null;
+  state.filterVisibleSet = null;
   rebuildChildren();
 }
 
@@ -388,7 +426,7 @@ async function createNewMap() {
   let { error } = await sb.from('maps').insert({
     owner_id: currentUser.id,
     title: state.boardTitle || 'Моя карта фич',
-    data: { columns: state.columns, nodes: state.nodes, nextId }
+    data: { columns: state.columns, nodes: state.nodes, nextId: nextId, availableTags: state.availableTags }
   });
 
   if (error) {
@@ -559,8 +597,62 @@ async function removeShare(id) {
 function render() {
   var t = document.getElementById('boardTitle');
   if (t && t.textContent !== state.boardTitle) t.textContent = state.boardTitle;
+  renderTagFilterBar();
   renderColumns();
   requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
+}
+
+function renderTagFilterBar() {
+  var bar = document.getElementById('tagFilterBar');
+  if (!bar) return;
+  bar.innerHTML = '';
+
+  var tags = getAllTags();
+  tags.forEach(function (tag) {
+    var chip = document.createElement('span');
+    chip.className = 'filter-hash' + (state.filterTag === tag ? ' active' : '');
+    chip.textContent = '#' + tag;
+    chip.addEventListener('click', function () {
+      if (state.filterTag === tag) {
+        state.filterTag = null;
+        state.filterVisibleSet = null;
+      } else {
+        state.filterTag = tag;
+        state.filterVisibleSet = computeFilterVisibleSet(tag);
+      }
+      render();
+    });
+    bar.appendChild(chip);
+  });
+
+  if (state.filterTag) {
+    var clear = document.createElement('span');
+    clear.className = 'filter-hash filter-clear';
+    clear.textContent = '✕ показать всё';
+    clear.addEventListener('click', function () {
+      state.filterTag = null;
+      state.filterVisibleSet = null;
+      render();
+    });
+    bar.appendChild(clear);
+  }
+
+  if (isOwner) {
+    var add = document.createElement('span');
+    add.className = 'filter-hash filter-add';
+    add.textContent = '+ тег';
+    add.addEventListener('click', function () {
+      var name = prompt('Название тега:');
+      if (!name) return;
+      name = name.trim().toLowerCase();
+      if (!name) return;
+      if (!state.availableTags) state.availableTags = [];
+      if (state.availableTags.indexOf(name) === -1) state.availableTags.push(name);
+      scheduleSave();
+      render();
+    });
+    bar.appendChild(add);
+  }
 }
 
 function renderColumns() {
@@ -608,7 +700,7 @@ function updateCards() {
 function renderCardBlock(node, depth) {
   if (depth === undefined) depth = 0;
   var block = document.createElement('div'); block.className = 'card-block'; block.dataset.nodeId = node.id; block.dataset.depth = depth;
-  if (hasAnyFilter() && !isNodeOrDescendantVisible(node)) { block.style.display = 'none'; return block; }
+  if (!isNodeVisible(node)) { block.style.display = 'none'; return block; }
   block.appendChild(createCardElement(node));
   var children = getChildrenInNextCol(node);
   if (node.colIndex + 1 < state.columns.length) {
@@ -717,6 +809,9 @@ function saveModal() {
   var n = getNodeById(state.editingNodeId); if (!n) return;
   n.title = $('#modalTitle').value.trim();
   n.tags = $('#modalTags').value.split(',').map(function (t) { return t.trim().toLowerCase(); }).filter(function (t) { return t; });
+  // Новые теги добавляем в общий набор таблицы
+  if (!state.availableTags) state.availableTags = [];
+  n.tags.forEach(function (t) { if (state.availableTags.indexOf(t) === -1) state.availableTags.push(t); });
   n.note = $('#modalNote').value.trim(); n.status = $('#modalStatus').value;
   var y = $('#modalYear').value, q = $('#modalQuarter').value;
   n.dueDate = (q === 'Now' || q === 'Next' || q === 'Later') ? q : ((y && q) ? (y + ' ' + q) : '');
