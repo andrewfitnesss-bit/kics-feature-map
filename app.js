@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v33';
+const APP_VERSION = 'v34';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -288,6 +288,52 @@ async function deleteMap() {
 
 async function selectMap(mapId) {
   await loadMap(mapId);
+}
+
+// Кастомный выпадающий список для чипов статуса/срока
+function openSelectMenu(anchor, options, onSelect) {
+  closeSelectMenu();
+
+  var menu = document.createElement('div');
+  menu.className = 'select-menu';
+
+  options.forEach(function (opt) {
+    var item = document.createElement('div');
+    item.className = 'select-menu-item';
+    item.textContent = opt.label;
+    item.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelect(opt.value);
+      closeSelectMenu();
+    });
+    menu.appendChild(item);
+  });
+
+  document.body.appendChild(menu);
+
+  var r = anchor.getBoundingClientRect();
+  menu.style.left = r.left + 'px';
+  menu.style.top = (r.bottom + 4) + 'px';
+  menu.style.minWidth = r.width + 'px';
+
+  // Закрытие по клику вне меню
+  setTimeout(function () {
+    document.addEventListener('click', handler);
+    document.addEventListener('scroll', handler, true);
+    function handler(e) {
+      if (!menu.contains(e.target)) {
+        closeSelectMenu();
+        document.removeEventListener('click', handler);
+        document.removeEventListener('scroll', handler, true);
+      }
+    }
+  }, 0);
+}
+
+function closeSelectMenu() {
+  var m = document.querySelector('.select-menu');
+  if (m) m.remove();
 }
 
 function openTagEditor(nodeId, oldTag) {
@@ -711,60 +757,72 @@ function renderCardBlock(node, depth) {
 function createCardElement(node) {
   var card = document.createElement('div'); card.className = 'card'; card.dataset.nodeId = node.id;
 
+  // Кнопки действий — сверху справа (вариант Б), текст заголовка сдвинут
+  if (isOwner) {
+    var ac = document.createElement('div'); ac.className = 'card-actions';
+    var ab = document.createElement('button'); ab.className = 'card-action-btn'; ab.textContent = '+'; ab.title = 'Добавить дочернюю карточку'; ab.addEventListener('click', function (e) { e.stopPropagation(); addChildNode(node); }); ac.appendChild(ab);
+    var eb = document.createElement('button'); eb.className = 'card-action-btn'; eb.textContent = '\u270e'; eb.title = 'Редактировать'; eb.addEventListener('click', function (e) { e.stopPropagation(); openModal(node.id); }); ac.appendChild(eb);
+    var db = document.createElement('button'); db.className = 'card-action-btn danger'; db.textContent = '\u2715'; db.title = 'Удалить'; db.addEventListener('click', function (e) { e.stopPropagation(); deleteNode(node.id); }); ac.appendChild(db);
+    card.appendChild(ac);
+  }
+
   var t = document.createElement('div'); t.className = 'card-title'; t.innerHTML = ht(node.title || 'Без названия'); card.appendChild(t);
 
   var m = document.createElement('div'); m.className = 'card-meta';
-  var sb = document.createElement('span'); sb.className = 'status-badge ' + SC[node.status]; sb.innerHTML = '<span class="status-dot ' + SD[node.status] + '"></span>' + SL[node.status]; m.appendChild(sb);
-  if (node.dueDate) { var ds = document.createElement('span'); ds.style.cssText = 'font-size:11px;color:var(--text-secondary)'; ds.textContent = node.dueDate; m.appendChild(ds); }
+
+  // Статус — кликабельный чип, выпадающий список
+  var sb = document.createElement('span'); sb.className = 'status-badge ' + SC[node.status]; sb.innerHTML = '<span class="status-dot ' + SD[node.status] + '"></span>' + SL[node.status];
+  if (isOwner) {
+    sb.classList.add('clickable-chip');
+    sb.title = 'Изменить статус';
+    sb.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openSelectMenu(sb, [
+        { value: 'none', label: SL.none },
+        { value: 'planned', label: SL.planned },
+        { value: 'wip', label: SL.wip },
+        { value: 'done', label: SL.done }
+      ], function (val) {
+        node.status = val;
+        scheduleSave(); updateCards(); syncHeights(); alignHeaders();
+      });
+    });
+  }
+  m.appendChild(sb);
+
+  // Срок — кликабельный чип, выпадающий список
+  var ds = document.createElement('span'); ds.className = 'due-chip'; ds.textContent = node.dueDate || 'срок';
+  if (isOwner) {
+    ds.classList.add('clickable-chip');
+    ds.title = 'Изменить срок / квартал';
+    ds.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openSelectMenu(ds, [
+        { value: '', label: '(без срока)' },
+        { value: 'Now', label: 'Now' },
+        { value: 'Next', label: 'Next' },
+        { value: 'Later', label: 'Later' },
+        { value: 'Q1', label: 'Q1' },
+        { value: 'Q2', label: 'Q2' },
+        { value: 'Q3', label: 'Q3' },
+        { value: 'Q4', label: 'Q4' }
+      ], function (val) {
+        if (!val) { node.dueDate = ''; }
+        else if (val.indexOf('Q') === 0) { var y = prompt('Год (например 2026):', new Date().getFullYear()); if (!y) return; node.dueDate = y + ' ' + val; }
+        else { node.dueDate = val; }
+        scheduleSave(); updateCards(); syncHeights(); alignHeaders();
+      });
+    });
+  }
+  m.appendChild(ds);
+
   card.appendChild(m);
 
   if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag'; ts.innerHTML = ht(tg); if (isOwner) { ts.title = 'Нажми, чтобы изменить тег'; ts.addEventListener('click', function (e) { e.stopPropagation(); openTagEditor(node.id, tg); }); } td.appendChild(ts); }); card.appendChild(td); }
 
   if (node.note) { var h = document.createElement('div'); h.className = 'card-hint'; h.textContent = node.note.length > 80 ? node.note.substring(0, 80) + '\u2026' : node.note; card.appendChild(h); }
 
-  if (isOwner) {
-    card.addEventListener('click', function () { openModal(node.id); });
-
-    var footer = document.createElement('div'); footer.className = 'card-footer';
-
-    // Действия (+ / ✎ / ✕)
-    var acts = document.createElement('div'); acts.className = 'card-actions';
-    var ab = document.createElement('button'); ab.className = 'card-action-btn'; ab.textContent = '+'; ab.title = 'Добавить дочернюю карточку'; ab.addEventListener('click', function (e) { e.stopPropagation(); addChildNode(node); }); acts.appendChild(ab);
-    var eb = document.createElement('button'); eb.className = 'card-action-btn'; eb.textContent = '\u270e'; eb.title = 'Редактировать'; eb.addEventListener('click', function (e) { e.stopPropagation(); openModal(node.id); }); acts.appendChild(eb);
-    var db = document.createElement('button'); db.className = 'card-action-btn danger'; db.textContent = '\u2715'; db.title = 'Удалить'; db.addEventListener('click', function (e) { e.stopPropagation(); deleteNode(node.id); }); acts.appendChild(db);
-    footer.appendChild(acts);
-
-    // Быстрый статус (выпадающий список)
-    var ss = document.createElement('select'); ss.className = 'quick-control'; ss.title = 'Статус';
-    ['none','planned','wip','done'].forEach(function (s) { var o = document.createElement('option'); o.value = s; o.textContent = SL[s]; if (node.status === s) o.selected = true; ss.appendChild(o); });
-    ss.addEventListener('change', function () { node.status = ss.value; scheduleSave(); updateCards(); syncHeights(); alignHeaders(); });
-    ss.addEventListener('click', function (e) { e.stopPropagation(); });
-    footer.appendChild(ss);
-
-    // Быстрый срок (выпадающий список)
-    var due = document.createElement('select'); due.className = 'quick-control'; due.title = 'Срок / Квартал';
-    var opts = ['','Now','Next','Later','Q1','Q2','Q3','Q4'];
-    opts.forEach(function (v) {
-      var o = document.createElement('option'); o.value = v; o.textContent = v === '' ? 'срок' : v;
-      var sel = false;
-      if (node.dueDate === 'Now' || node.dueDate === 'Next' || node.dueDate === 'Later') { sel = (node.dueDate === v); }
-      else if (v && v.indexOf('Q') === 0) { var mm = node.dueDate.match(/Q[1-4]/); sel = (mm && mm[0] === v); }
-      else if (v === '') { sel = !node.dueDate; }
-      if (sel) o.selected = true;
-      due.appendChild(o);
-    });
-    due.addEventListener('change', function () {
-      var val = due.value;
-      if (!val) { node.dueDate = ''; }
-      else if (val.indexOf('Q') === 0) { var y = prompt('Год (например 2026):', new Date().getFullYear()); if (!y) return; node.dueDate = y + ' ' + val; }
-      else { node.dueDate = val; }
-      scheduleSave(); updateCards(); syncHeights(); alignHeaders();
-    });
-    due.addEventListener('click', function (e) { e.stopPropagation(); });
-    footer.appendChild(due);
-
-    card.appendChild(footer);
-  }
+  if (isOwner) card.addEventListener('click', function () { openModal(node.id); });
 
   return card;
 }

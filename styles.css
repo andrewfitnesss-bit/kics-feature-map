@@ -376,10 +376,10 @@ body {
 .sub-column > .empty-slot { flex:1; display:flex; align-items:center; justify-content:center; pointer-events:none; user-select:none; }
 
 /* ---- Card ---- */
-.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; cursor:pointer; transition:all var(--transition); box-shadow:var(--shadow-sm); position:relative; min-height:60px; display:flex; flex-direction:column; gap:6px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; cursor:pointer; transition:all var(--transition); box-shadow:var(--shadow-sm); position:relative; min-height:60px; display:flex; flex-direction:column; gap:6px; overflow:hidden; }
 .card:hover { box-shadow:var(--shadow-md); border-color:var(--text-tertiary); transform:translateY(-1px); }
 .card:active { transform:scale(0.985); }
-.card-title { font-size:14px; font-weight:600; line-height:1.3; word-break:break-word; }
+.card-title { font-size:14px; font-weight:600; line-height:1.3; word-break:break-word; padding-right:90px; }
 .card-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 
 .status-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; white-space:nowrap; }
@@ -397,38 +397,45 @@ body {
 .card-tag { font-size:10px; font-weight:500; padding:1px 7px; border-radius:10px; background:var(--accent-light); color:var(--accent); white-space:nowrap; }
 .card-hint { font-size:11px; color:var(--text-tertiary); }
 
-.card-footer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-  opacity: 0;
-  transition: opacity var(--transition);
-}
-.card:hover .card-footer { opacity: 1; }
+.card-actions { position:absolute; top:8px; right:8px; display:flex; gap:2px; opacity:0; transition:opacity var(--transition); z-index:3; }
+.card:hover .card-actions { opacity:1; }
 
-.card-actions {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+/* Кликабельные чипы статуса/срока */
+.clickable-chip { cursor:pointer; user-select:none; white-space:nowrap; }
+.clickable-chip:hover { filter:brightness(0.96); box-shadow:0 0 0 2px var(--accent-light); }
+
+.due-chip {
+  font-size:11px;
+  font-weight:600;
+  color:var(--text-secondary);
+  padding:2px 8px;
+  border-radius:12px;
+  background:#f2f2f7;
+  white-space:nowrap;
 }
 
-.quick-control {
-  font-family: inherit;
-  font-size: 12px;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+/* Кастомный выпадающий список */
+.select-menu {
+  position: fixed;
+  z-index: 4000;
   background: var(--surface);
-  color: var(--text-secondary);
-  cursor: pointer;
-  outline: none;
-  transition: all var(--transition);
-  max-width: 110px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
-.quick-control:hover { border-color: var(--accent); color: var(--accent); }
+.select-menu-item {
+  font-size: 13px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text);
+  white-space: nowrap;
+}
+.select-menu-item:hover { background: var(--accent-light); color: var(--accent); }
 
 /* Теги — кликабельные, при наведении подсвечиваются */
 .card-tag { cursor: pointer; }
