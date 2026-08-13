@@ -4,6 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
+const APP_VERSION = 'v28';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -827,6 +828,10 @@ function initEvents() {
 // 14. Init
 // ──────────────────────────────────────
 async function init() {
+  // Показываем номер версии из единой константы
+  var vb = document.getElementById('versionBadge');
+  if (vb) { vb.textContent = APP_VERSION; }
+
   var cfg = window.SUPABASE_CONFIG;
   if (!cfg || !cfg.url || cfg.url.indexOf('ВАШ_ПРОЕКТ') !== -1) {
     document.body.innerHTML = '<div style="max-width:600px;margin:80px auto;padding:24px;font-family:-apple-system,sans-serif;line-height:1.6"><h2>Нужно настроить Supabase</h2><p>Открой файл <code>config.js</code> и вставь туда <code>url</code> и <code>anonKey</code> из Supabase Dashboard → Settings → API.</p><p>Затем выполни <code>schema.sql</code> в SQL Editor Supabase.</p></div>';
