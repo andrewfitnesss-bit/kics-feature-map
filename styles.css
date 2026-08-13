@@ -120,6 +120,15 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.version-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: #f2f2f7;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
 
 /* Share modal helpers */
 .share-hint {

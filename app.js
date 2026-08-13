@@ -739,8 +739,13 @@ function initEvents() {
     bt.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); bt.blur(); } });
   }
 
-  // Logout
-  $('#logoutBtn').addEventListener('click', async function () { await sb.auth.signOut(); location.reload(); });
+  // Logout — всегда перезагружаем страницу, даже если signOut упадёт
+  $('#logoutBtn').addEventListener('click', function () {
+    try {
+      if (sb) { sb.auth.signOut(); }
+    } catch (e) {}
+    location.reload();
+  });
 
   // Search
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modalOverlay').style.display === 'flex') closeModal(); else if ($('#shareOverlay').style.display === 'flex') $('#shareOverlay').style.display = 'none'; else if (state.searchQuery) { $('#searchInput').value = ''; state.searchQuery = ''; $('#clearSearch').style.display = 'none'; updateCards(); syncHeights(); alignHeaders(); } } });
@@ -788,5 +793,10 @@ async function init() {
     if (!session) { currentUser = null; showAuth(); }
   });
 }
+
+// Глобальный ловец ошибок — любая JS‑ошибка видна красным баннером
+window.addEventListener('error', function (e) {
+  try { showError('JS: ' + (e.message || 'неизвестная ошибка')); } catch (err) {}
+});
 
 document.addEventListener('DOMContentLoaded', init);
