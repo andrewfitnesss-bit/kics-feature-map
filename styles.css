@@ -108,9 +108,15 @@ body {
 .user-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding-left: 10px;
   border-left: 1px solid var(--border);
+}
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 .user-email {
   font-size: 13px;
@@ -121,12 +127,12 @@ body {
   white-space: nowrap;
 }
 .version-badge {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-tertiary);
   background: #f2f2f7;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 1px 7px;
+  border-radius: 8px;
   white-space: nowrap;
 }
 
