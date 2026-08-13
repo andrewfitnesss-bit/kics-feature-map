@@ -759,26 +759,74 @@ function alignHeaders() {
 
 var GAP = 10, DEF_H = 60;
 function syncHeights() {
-  $$('.card').forEach(function (c) { c.style.minHeight = ''; });
-  $$('.empty-slot').forEach(function (e) { e.style.minHeight = ''; });
+  // Сброс (пакетная запись)
+  var cards = $$('.card');
+  for (var i = 0; i < cards.length; i++) cards[i].style.minHeight = '';
+  var emptySlots = $$('.empty-slot');
+  for (var e = 0; e < emptySlots.length; e++) emptySlots[e].style.minHeight = '';
+
+  // Кеши: id -> узел и id -> DOM-элемент (убираем O(n²) поиски)
+  var nodeById = {};
+  var elById = {};
+  state.nodes.forEach(function (n) { nodeById[n.id] = n; });
+  for (var k = 0; k < cards.length; k++) {
+    var cid = cards[k].getAttribute('data-node-id');
+    if (cid) elById[cid] = cards[k];
+  }
+
+  // Пакетное чтение естественных высот (один раз, без thrash)
+  var heights = {};
+  for (var id in elById) heights[id] = elById[id].offsetHeight || DEF_H;
+
+  // Проход справа налево
   for (var ci = state.columns.length - 2; ci >= 0; ci--) {
-    getNodesByCol(ci).forEach(function (p) {
-      var ch = getChildrenInNextCol(p); var pc = document.querySelector('.card[data-node-id="' + p.id + '"]'); if (!pc) return;
-      var pn = pc.offsetHeight || DEF_H;
-      if (ch.length === 0) { var bl = pc.closest('.card-block'); if (bl) { var es = bl.querySelector('.sub-column > .empty-slot'); if (es) es.style.minHeight = pn + 'px'; } }
-      else { var cc = ch.map(function (c) { return document.querySelector('.card[data-node-id="' + c.id + '"]'); }).filter(function (c) { return c && c.offsetParent !== null; }); if (!cc.length) return;
-        var mx = 0; cc.forEach(function (c) { var h = c.offsetHeight; if (h > mx) mx = h; }); cc.forEach(function (c) { c.style.minHeight = mx + 'px'; });
-        pc.style.minHeight = Math.max(pn, cc.length * mx + (cc.length - 1) * GAP) + 'px'; }
+    state.nodes.forEach(function (p) {
+      if (p.colIndex !== ci) return;
+      var childIds = [];
+      (p.children || []).forEach(function (cid) {
+        var c = nodeById[cid];
+        if (c && c.colIndex === ci + 1 && elById[cid]) childIds.push(cid);
+      });
+      var pc = elById[p.id];
+      if (childIds.length === 0) {
+        if (pc && pc.closest) {
+          var bl = pc.closest('.card-block');
+          if (bl) {
+            var es = bl.querySelector('.sub-column > .empty-slot');
+            if (es) es.style.minHeight = (heights[p.id] || DEF_H) + 'px';
+          }
+        }
+        return;
+      }
+      var mx = 0;
+      childIds.forEach(function (cid) { if (heights[cid] > mx) mx = heights[cid]; });
+      childIds.forEach(function (cid) { elById[cid].style.minHeight = mx + 'px'; heights[cid] = mx; });
+      var total = childIds.length * mx + (childIds.length - 1) * GAP;
+      var own = heights[p.id] || DEF_H;
+      var nh = Math.max(own, total);
+      elById[p.id].style.minHeight = nh + 'px';
+      heights[p.id] = nh;
     });
   }
+
+  // Второй проход: дочка не выше родителя
   for (var ci2 = state.columns.length - 2; ci2 >= 0; ci2--) {
-    getNodesByCol(ci2).forEach(function (p) {
-      var ch = getChildrenInNextCol(p); if (!ch.length) return; var pc = document.querySelector('.card[data-node-id="' + p.id + '"]'); if (!pc) return;
-      var cc = ch.map(function (c) { return document.querySelector('.card[data-node-id="' + c.id + '"]'); }).filter(function (c) { return c && c.offsetParent !== null; }); if (!cc.length) return;
-      var mx = 0; cc.forEach(function (c) { var h = c.offsetHeight; if (h > mx) mx = h; });
-      var ph = pc.offsetHeight; var ma = Math.floor((ph - (cc.length - 1) * GAP) / cc.length); var fh = Math.min(mx, ma);
-      cc.forEach(function (c) { c.style.minHeight = fh + 'px'; });
-      var th = cc.length * fh + (cc.length - 1) * GAP; if (th > ph) pc.style.minHeight = th + 'px';
+    state.nodes.forEach(function (p) {
+      if (p.colIndex !== ci2) return;
+      var childIds = [];
+      (p.children || []).forEach(function (cid) {
+        var c = nodeById[cid];
+        if (c && c.colIndex === ci2 + 1 && elById[cid]) childIds.push(cid);
+      });
+      if (childIds.length === 0) return;
+      var mx = 0;
+      childIds.forEach(function (cid) { if (heights[cid] > mx) mx = heights[cid]; });
+      var ph = heights[p.id] || DEF_H;
+      var ma = Math.floor((ph - (childIds.length - 1) * GAP) / childIds.length);
+      var fh = Math.max(DEF_H, Math.min(mx, ma));
+      childIds.forEach(function (cid) { elById[cid].style.minHeight = fh + 'px'; heights[cid] = fh; });
+      var total = childIds.length * fh + (childIds.length - 1) * GAP;
+      if (total > ph) { elById[p.id].style.minHeight = total + 'px'; heights[p.id] = total; }
     });
   }
 }
@@ -811,7 +859,7 @@ function saveModal() {
   n.note = $('#modalNote').value.trim(); n.status = $('#modalStatus').value;
   var y = $('#modalYear').value, q = $('#modalQuarter').value;
   n.dueDate = (q === 'Now' || q === 'Next' || q === 'Later') ? q : ((y && q) ? (y + ' ' + q) : '');
-  closeModal(); scheduleSave(); updateCards(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
+  closeModal(); scheduleSave(); updateCards(); renderTagFilterBar(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
 }
 
 // ──────────────────────────────────────
