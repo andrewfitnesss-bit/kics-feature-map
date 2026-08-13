@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v31';
+const APP_VERSION = 'v32';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
