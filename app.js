@@ -113,6 +113,8 @@ function showError(msg) {
 // 6. Облачное сохранение (debounced)
 // ──────────────────────────────────────
 let saveTimer = null;
+let searchDebounce = null;
+
 function scheduleSave() {
   if (!state.mapId || !sb) return;
   // Локальный бэкап (на случай оффлайна)
@@ -560,6 +562,7 @@ function createCardElement(node) {
 
     // Статус
     var qs = document.createElement('select'); qs.className = 'quick-status';
+    qs.setAttribute('name', 'card-status-' + node.id);
     ['none','planned','wip','done'].forEach(function (s) {
       var o = document.createElement('option'); o.value = s; o.textContent = SL[s]; if (node.status === s) o.selected = true; qs.appendChild(o);
     });
@@ -569,6 +572,7 @@ function createCardElement(node) {
 
     // Срок (быстрый)
     var qd = document.createElement('select'); qd.className = 'quick-due';
+    qd.setAttribute('name', 'card-due-' + node.id);
     var dueOpts = ['','Now','Next','Later','Q1','Q2','Q3','Q4'];
     dueOpts.forEach(function (dv) {
       var o = document.createElement('option'); o.value = dv;
@@ -749,8 +753,22 @@ function initEvents() {
 
   // Search
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modalOverlay').style.display === 'flex') closeModal(); else if ($('#shareOverlay').style.display === 'flex') $('#shareOverlay').style.display = 'none'; else if (state.searchQuery) { $('#searchInput').value = ''; state.searchQuery = ''; $('#clearSearch').style.display = 'none'; updateCards(); syncHeights(); alignHeaders(); } } });
-  $('#searchInput').addEventListener('input', function () { state.searchQuery = $('#searchInput').value.trim(); $('#clearSearch').style.display = state.searchQuery ? 'block' : 'none'; updateCards(); syncHeights(); alignHeaders(); });
-  $('#clearSearch').addEventListener('click', function () { $('#searchInput').value = ''; state.searchQuery = ''; $('#clearSearch').style.display = 'none'; updateCards(); syncHeights(); alignHeaders(); });
+  $('#searchInput').addEventListener('input', function () {
+    var v = $('#searchInput').value.trim();
+    $('#clearSearch').style.display = v ? 'block' : 'none';
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(function () {
+      state.searchQuery = v;
+      updateCards();
+      requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
+    }, 250);
+  });
+  $('#clearSearch').addEventListener('click', function () {
+    $('#searchInput').value = ''; state.searchQuery = '';
+    $('#clearSearch').style.display = 'none';
+    clearTimeout(searchDebounce);
+    updateCards(); syncHeights(); alignHeaders();
+  });
 
   // Export / import / demo
   $('#exportBtn').addEventListener('click', function () { var d = JSON.stringify({ columns: state.columns, nodes: state.nodes, nextId: nextId }, null, 2); var b = new Blob([d], { type: 'application/json' }); var u = URL.createObjectURL(b); var a = document.createElement('a'); a.href = u; a.download = 'kics-feature-map-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); URL.revokeObjectURL(u); });
