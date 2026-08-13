@@ -738,6 +738,10 @@ function initEvents() {
       if (!v) { bt.textContent = state.boardTitle; return; }
       state.boardTitle = v;
       bt.textContent = v;
+      // Синхронизируем название в списке таблиц
+      var mapMeta = state.maps.find(function (m) { return m.id === state.mapId; });
+      if (mapMeta) { mapMeta.title = v; }
+      renderMapSelector();
       scheduleSave();
     });
     bt.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); bt.blur(); } });
