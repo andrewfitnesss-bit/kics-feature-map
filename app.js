@@ -825,6 +825,7 @@ function populateYearSelect() { var ys = $('#modalYear'); if (!ys) return; ys.in
 function openModal(id) {
   var n = getNodeById(id); if (!n || !isOwner) return;
   state.editingNodeId = id; $('#modalTitle').value = n.title; $('#modalTags').value = n.tags.join(', ');
+  setupTagAutocomplete();
   $('#modalNote').value = n.note; $('#modalStatus').value = n.status; populateYearSelect();
   if (n.dueDate === 'Now' || n.dueDate === 'Next' || n.dueDate === 'Later') {
     $('#modalYear').value = ''; $('#modalQuarter').value = n.dueDate;
@@ -834,7 +835,49 @@ function openModal(id) {
   }
   $('#modalOverlay').style.display = 'flex';
 }
-function closeModal() { $('#modalOverlay').style.display = 'none'; state.editingNodeId = null; }
+function closeModal() { $('#modalOverlay').style.display = 'none'; state.editingNodeId = null; var d = document.getElementById('tagAutocomplete'); if (d) d.remove(); }
+
+function setupTagAutocomplete() {
+  var input = document.getElementById('modalTags');
+  if (!input) return;
+  input.addEventListener('focus', function () { showTagAutocomplete(input); });
+  input.addEventListener('input', function () { showTagAutocomplete(input); });
+  input.addEventListener('blur', function () { setTimeout(function () { var d = document.getElementById('tagAutocomplete'); if (d) d.remove(); }, 200); });
+}
+
+function showTagAutocomplete(input) {
+  var old = document.getElementById('tagAutocomplete');
+  if (old) old.remove();
+
+  var current = input.value.split(',').map(function (t) { return t.trim().toLowerCase(); }).filter(function (t) { return t; });
+  var available = getAllTags().filter(function (t) { return current.indexOf(t) === -1; });
+  if (available.length === 0) return;
+
+  var box = document.createElement('div');
+  box.id = 'tagAutocomplete';
+  box.className = 'tag-autocomplete';
+
+  available.forEach(function (t) {
+    var item = document.createElement('div');
+    item.className = 'tag-autocomplete-item';
+    item.textContent = t;
+    item.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      var cur = input.value.trim();
+      var tags = cur ? cur.split(',').map(function (x) { return x.trim(); }).filter(function (x) { return x; }) : [];
+      if (tags.indexOf(t) === -1) tags.push(t);
+      input.value = tags.join(', ');
+      box.remove();
+    });
+    box.appendChild(item);
+  });
+
+  document.body.appendChild(box);
+  var r = input.getBoundingClientRect();
+  box.style.left = r.left + 'px';
+  box.style.top = (r.bottom + 4) + 'px';
+  box.style.width = r.width + 'px';
+}
 
 // ──────────────────────────────────────
 // 13. Events

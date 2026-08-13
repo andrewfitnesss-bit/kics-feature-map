@@ -463,6 +463,29 @@ body {
 
 .empty-slot { border:2px dashed var(--border); border-radius:var(--radius); padding:16px 14px; text-align:center; color:var(--text-tertiary); font-size:12px; min-height:50px; display:flex; align-items:center; justify-content:center; }
 
+/* ---- Выпадающий список тегов в модалке ---- */
+.tag-autocomplete {
+  position: fixed;
+  z-index: 250;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.tag-autocomplete-item {
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--accent);
+}
+.tag-autocomplete-item:hover {
+  background: var(--accent-light);
+}
+
 /* ---- Quarter picker ---- */
 .quarter-picker { display:flex; gap:8px; }
 .quarter-select, .year-select { flex:1; }
