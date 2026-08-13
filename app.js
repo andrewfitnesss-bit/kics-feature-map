@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v29';
+const APP_VERSION = 'v31';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -104,28 +104,15 @@ function ht(t) { if (!state.searchQuery) return eh(t); var q = state.searchQuery
 function eh(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ──────────────────────────────────────
-// 4. Демо-данные (без сохранения — сохранение отдельно)
+// 4. Пустое начальное состояние (новая таблица без выдуманных карточек)
 // ──────────────────────────────────────
-function buildDemoState() {
+function setEmptyState() {
   state.columns = [{ id: 'col0', name: 'Функциональная область' }, { id: 'col1', name: 'Верхнеуровневая фича' }, { id: 'col2', name: 'Фича' }, { id: 'col3', name: 'Сабфича' }, { id: 'col4', name: 'Комментарий' }];
-  state.nodes = []; nextId = 1;
-  function add(pid, col, title, tags, status, due, note) {
-    var n = createNode(pid, col, title); n.tags = tags || []; n.status = status || 'none'; n.dueDate = due || ''; n.note = note || ''; state.nodes.push(n);
-    if (pid) { var p = getNodeById(pid); if (p) p.children.push(n.id); } return n.id;
-  }
-  var d1 = add(null, 0, 'Доступ и аутентификация', ['access', 'core'], 'done', '2025 Q4', 'Центральный домен управления доступом');
-  var a1 = add(d1, 1, 'Единый вход (SSO)', ['sso', 'core'], 'done', '2025 Q4', ''); add(a1, 2, 'SAML 2.0 интеграция', ['saml', 'protocol'], 'done', '2025 Q3', ''); add(a1, 2, 'OIDC / OAuth 2.0', ['oidc', 'oauth', 'protocol'], 'done', '2025 Q4', ''); add(a1, 2, 'Kerberos / SPNEGO', ['kerberos', 'windows'], 'done', '2026 Q1', '');
-  var a2 = add(d1, 1, 'Многофакторная аутентификация (MFA)', ['mfa', 'security'], 'wip', '2026 Q3', ''); add(a2, 2, 'TOTP / HOTP', ['totp', 'otp'], 'done', '2025 Q4', ''); add(a2, 2, 'FIDO2 / WebAuthn', ['fido2', 'webauthn', 'passwordless'], 'wip', '2026 Q2', ''); add(a2, 2, 'Push-уведомления', ['push', 'mobile'], 'planned', '2026 Q4', ''); add(a2, 2, 'Аппаратные ключи (YubiKey)', ['yubikey', 'hardware'], 'wip', '2026 Q3', '');
-  var a3 = add(d1, 1, 'Ролевая модель (RBAC/ABAC)', ['rbac', 'abac', 'authz'], 'planned', '2026 Q2', ''); add(a3, 2, 'Конструктор ролей', ['ui', 'builder'], 'planned', '2026 Q2', ''); add(a3, 2, 'Политики на основе атрибутов', ['abac', 'policy'], 'planned', '2026 Q3', '');
-  var d2 = add(null, 0, 'Мониторинг и SIEM', ['monitoring', 'siem', 'core'], 'wip', '2026 Q3', '');
-  var b1 = add(d2, 1, 'Сбор событий', ['events', 'collection'], 'done', '2025 Q4', ''); add(b1, 2, 'Syslog-коллектор', ['syslog', 'collector'], 'done', '2025 Q3', ''); add(b1, 2, 'Windows Event Log', ['windows', 'eventlog'], 'done', '2025 Q4', ''); add(b1, 2, 'Агент для Linux', ['agent', 'linux'], 'wip', '2026 Q1', ''); add(b1, 2, 'API-коннекторы', ['api', 'connector', 'cloud'], 'planned', '2026 Q3', '');
-  var b2 = add(d2, 1, 'Корреляция событий', ['correlation', 'analytics'], 'wip', '2026 Q2', ''); add(b2, 2, 'Правила корреляции', ['rules', 'ui', 'builder'], 'wip', '2026 Q2', ''); add(b2, 2, 'ML-модели аномалий', ['ml', 'anomaly', 'ai'], 'planned', '2026 Q4', '');
-  var b3 = add(d2, 1, 'Дашборды и отчёты', ['dashboards', 'reports', 'visualization'], 'wip', '2026 Q2', ''); add(b3, 2, 'Конструктор дашбордов', ['ui', 'widgets'], 'wip', '2026 Q1', ''); add(b3, 2, 'Экспорт в PDF/CSV', ['export', 'pdf', 'csv'], 'done', '2025 Q4', ''); add(b3, 2, 'Рассылка отчётов', ['schedule', 'email'], 'planned', '2026 Q3', '');
-  var d3 = add(null, 0, 'Управление уязвимостями', ['vuln', 'core'], 'wip', '2026 Q4', '');
-  var c1 = add(d3, 1, 'Сканирование узлов', ['scan', 'scanner'], 'wip', '2026 Q2', ''); add(c1, 2, 'Сетевой сканер', ['nmap', 'network'], 'done', '2026 Q1', ''); add(c1, 2, 'Сканер веб-приложений', ['web', 'appsec'], 'wip', '2026 Q3', ''); add(c1, 2, 'Сканер контейнеров', ['containers', 'docker'], 'planned', '2026 Q4', '');
-  var c2 = add(d3, 1, 'Приоритизация уязвимостей', ['prioritization', 'risk'], 'planned', '2026 Q3', ''); add(c2, 2, 'CVSS / EPSS scoring', ['cvss', 'epss', 'scoring'], 'planned', '2026 Q2', ''); add(c2, 2, 'Asset-based приоритизация', ['asset', 'context'], 'planned', '2026 Q4', '');
-  var c3 = add(d3, 1, 'Patch Management', ['patching', 'remediation'], 'planned', '2026 Q4', ''); add(c3, 2, 'Интеграция с WSUS / SCCM', ['wsus', 'sccm', 'integration'], 'planned', '2026 Q4', '');
-  rebuildChildren();
+  state.nodes = [];
+  nextId = 1;
+  state.availableTags = [];
+  state.filterTag = null;
+  state.filterVisibleSet = null;
 }
 
 // ──────────────────────────────────────
@@ -219,9 +206,10 @@ async function createFirstMap() {
     state.columns = importData.columns && importData.columns.length ? importData.columns : defaultColumns();
     state.nodes = importData.nodes;
     nextId = importData.nextId || 1;
+    state.availableTags = importData.availableTags || [];
     rebuildChildren();
   } else {
-    buildDemoState();
+    setEmptyState();
   }
   var id = await insertMap('Моя карта фич');
   if (!id) return;
@@ -256,10 +244,18 @@ async function insertMap(title) {
 }
 
 async function newMap() {
-  var title = prompt('Название таблицы:', 'Новая таблица');
-  if (title === null) return;
-  title = title.trim() || 'Новая таблица';
-  buildDemoState();
+  // Проверка на дубликат имени
+  var title;
+  while (true) {
+    title = prompt('Название таблицы:', 'Новая таблица');
+    if (title === null) return;
+    title = title.trim();
+    if (!title) { alert('Имя не может быть пустым'); continue; }
+    var dupe = state.maps.some(function (m) { return m.title.toLowerCase() === title.toLowerCase(); });
+    if (dupe) { alert('Таблица с таким именем уже есть. Введи другое имя'); continue; }
+    break;
+  }
+  setEmptyState();
   var id = await insertMap(title);
   if (!id) return;
   state.mapId = id;
@@ -277,7 +273,7 @@ async function deleteMap() {
   if (error) { showError('не удалось удалить: ' + error.message); return; }
   state.maps = state.maps.filter(function (m) { return m.id !== state.mapId; });
   if (state.maps.length === 0) {
-    buildDemoState();
+    setEmptyState();
     var id = await insertMap('Моя карта фич');
     if (!id) return;
     state.mapId = id;
@@ -420,7 +416,7 @@ async function createNewMap() {
     nextId = importData.nextId || 1;
     rebuildChildren();
   } else {
-    buildDemoState();
+    setEmptyState();
   }
 
   let { error } = await sb.from('maps').insert({
@@ -545,7 +541,7 @@ async function afterLogin() {
   try {
     await loadMaps();
   } catch (e) {
-    buildDemoState();
+    setEmptyState();
     render();
   }
 }
@@ -957,7 +953,6 @@ function initEvents() {
     r.onload = function (ev) { try { var d = JSON.parse(ev.target.result); if (!d.columns || !d.nodes) throw new Error('bad'); state.columns = d.columns; state.nodes = d.nodes; nextId = d.nextId || 1; rebuildChildren(); scheduleSave(); render(); } catch (ex) { alert('Ошибка импорта'); } };
     r.readAsText(f); e.target.value = '';
   });
-  $('#resetDemoBtn').addEventListener('click', function () { if (!isOwner) { alert('У тебя режим просмотра'); return; } if (confirm('Заменить таблицу демо-данными?')) { state.selectedTags = {}; state.searchQuery = ''; $('#searchInput').value = ''; buildDemoState(); scheduleSave(); render(); } });
 
   window.addEventListener('resize', function () { syncHeights(); alignHeaders(); });
 }
