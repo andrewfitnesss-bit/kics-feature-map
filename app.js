@@ -58,6 +58,7 @@ function nodeMatchesFilter(node) {
 }
 function isNodeOrDescendantVisible(node) { if (nodeMatchesFilter(node)) return true; for (var i = 0; i < (node.children || []).length; i++) { var c = getNodeById(node.children[i]); if (c && isNodeOrDescendantVisible(c)) return true; } return false; }
 function hasAnyFilter() { if (state.searchQuery) return true; for (var k in state.selectedTags) { if (state.selectedTags[k] && state.selectedTags[k].size > 0) return true; } return false; }
+function getAllTags() { var s = {}; state.nodes.forEach(function (n) { (n.tags || []).forEach(function (t) { s[t] = 1; }); }); return Object.keys(s).sort(); }
 
 var $ = function (s) { return document.querySelector(s); }, $$ = function (s) { return document.querySelectorAll(s); };
 var SL = { done: 'Реализовано', wip: 'В работе', planned: 'Запланировано', none: 'Не начато' };
@@ -255,6 +256,79 @@ async function deleteMap() {
 
 async function selectMap(mapId) {
   await loadMap(mapId);
+}
+
+function openTagEditor(nodeId, oldTag) {
+  var node = getNodeById(nodeId);
+  if (!node) return;
+
+  // Удаляем старое мини-окно, если было
+  var old = document.getElementById('tagEditor');
+  if (old) old.remove();
+
+  var box = document.createElement('div');
+  box.id = 'tagEditor';
+  box.className = 'tag-editor';
+
+  var head = document.createElement('div');
+  head.className = 'tag-editor-head';
+  head.textContent = 'Тег: ' + oldTag;
+  box.appendChild(head);
+
+  // Список всех тегов в системе для замены
+  var all = getAllTags().filter(function (t) { return t !== oldTag; });
+  var list = document.createElement('div');
+  list.className = 'tag-editor-list';
+
+  all.forEach(function (t) {
+    var item = document.createElement('div');
+    item.className = 'tag-editor-item';
+    item.textContent = t;
+    item.addEventListener('click', function () {
+      var idx = node.tags.indexOf(oldTag);
+      if (idx !== -1) { node.tags[idx] = t; }
+      box.remove();
+      scheduleSave();
+      updateCards(); syncHeights(); alignHeaders();
+    });
+    list.appendChild(item);
+  });
+
+  if (all.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'tag-editor-empty';
+    empty.textContent = 'Других тегов нет';
+    list.appendChild(empty);
+  }
+  box.appendChild(list);
+
+  // Кнопка удаления тега
+  var del = document.createElement('button');
+  del.className = 'tag-editor-del';
+  del.textContent = 'Удалить тег';
+  del.addEventListener('click', function () {
+    node.tags = node.tags.filter(function (x) { return x !== oldTag; });
+    box.remove();
+    scheduleSave();
+    updateCards(); syncHeights(); alignHeaders();
+  });
+  box.appendChild(del);
+
+  // Позиционируем к тегу (просто фиксируем по центру внизу для простоты)
+  document.body.appendChild(box);
+  var r = box.getBoundingClientRect();
+  box.style.left = Math.max(12, (window.innerWidth - r.width) / 2) + 'px';
+  box.style.top = Math.max(80, (window.innerHeight - r.height) / 2) + 'px';
+
+  // Закрытие по клику вне окна
+  setTimeout(function () {
+    document.addEventListener('click', function handler(e) {
+      if (!box.contains(e.target)) {
+        box.remove();
+        document.removeEventListener('click', handler);
+      }
+    });
+  }, 0);
 }
 
 function renderMapSelector() {
@@ -556,49 +630,11 @@ function createCardElement(node) {
   }
   var t = document.createElement('div'); t.className = 'card-title'; t.innerHTML = ht(node.title || 'Без названия'); card.appendChild(t);
 
-  // Быстрые действия (только для владельца)
-  if (isOwner) {
-    var q = document.createElement('div'); q.className = 'card-quick';
-
-    // Статус
-    var qs = document.createElement('select'); qs.className = 'quick-status';
-    qs.setAttribute('name', 'card-status-' + node.id);
-    ['none','planned','wip','done'].forEach(function (s) {
-      var o = document.createElement('option'); o.value = s; o.textContent = SL[s]; if (node.status === s) o.selected = true; qs.appendChild(o);
-    });
-    qs.addEventListener('change', function () { node.status = qs.value; scheduleSave(); });
-    qs.addEventListener('click', function (e) { e.stopPropagation(); });
-    q.appendChild(qs);
-
-    // Срок (быстрый)
-    var qd = document.createElement('select'); qd.className = 'quick-due';
-    qd.setAttribute('name', 'card-due-' + node.id);
-    var dueOpts = ['','Now','Next','Later','Q1','Q2','Q3','Q4'];
-    dueOpts.forEach(function (dv) {
-      var o = document.createElement('option'); o.value = dv;
-      o.textContent = dv === '' ? 'срок' : dv;
-      // показать текущее значение
-      var cur = node.dueDate;
-      if ((dv === '' && !cur) || (dv === cur) || (cur && cur.indexOf(dv) !== -1 && dv.indexOf('Q') === 0)) o.selected = true;
-      qd.appendChild(o);
-    });
-    qd.addEventListener('change', function () {
-      if (qd.value === '') { node.dueDate = ''; }
-      else if (qd.value.indexOf('Q') === 0) { var y = prompt('Год (например 2026):', new Date().getFullYear()); if (y) { node.dueDate = y + ' ' + qd.value; } }
-      else { node.dueDate = qd.value; }
-      scheduleSave(); updateCards(); syncHeights(); alignHeaders();
-    });
-    qd.addEventListener('click', function (e) { e.stopPropagation(); });
-    q.appendChild(qd);
-
-    card.appendChild(q);
-  }
-
   var m = document.createElement('div'); m.className = 'card-meta';
   var sb = document.createElement('span'); sb.className = 'status-badge ' + SC[node.status]; sb.innerHTML = '<span class="status-dot ' + SD[node.status] + '"></span>' + SL[node.status]; m.appendChild(sb);
   if (node.dueDate) { var ds = document.createElement('span'); ds.style.cssText = 'font-size:11px;color:var(--text-secondary)'; ds.textContent = node.dueDate; m.appendChild(ds); }
   card.appendChild(m);
-  if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag' + (isOwner ? ' quick-removable' : ''); if (isOwner) { ts.innerHTML = ht(tg) + ' <span class="tag-x">\u00d7</span>'; ts.addEventListener('click', function (e) { e.stopPropagation(); node.tags = node.tags.filter(function (x) { return x !== tg; }); scheduleSave(); updateCards(); syncHeights(); alignHeaders(); }); } else { ts.innerHTML = ht(tg); } td.appendChild(ts); }); card.appendChild(td); }
+  if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag'; ts.innerHTML = ht(tg); if (isOwner) { ts.title = 'Нажми, чтобы изменить тег'; ts.addEventListener('click', function (e) { e.stopPropagation(); openTagEditor(node.id, tg); }); } td.appendChild(ts); }); card.appendChild(td); }
   if (node.note) { var h = document.createElement('div'); h.className = 'card-hint'; h.textContent = node.note.length > 80 ? node.note.substring(0, 80) + '\u2026' : node.note; card.appendChild(h); }
   if (isOwner) card.addEventListener('click', function () { openModal(node.id); });
   return card;
