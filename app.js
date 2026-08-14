@@ -776,7 +776,7 @@ function renderCardBlock(node, depth) {
 function createCardElement(node) {
   var card = document.createElement('div'); card.className = 'card'; card.dataset.nodeId = node.id;
   if (!canEdit()) { card.classList.add('view-mode'); }
-  if (node.color && CARD_COLORS[node.color]) { card.classList.add(CARD_COLORS[node.color].cls); }
+  if (node.color && CARD_COLORS[node.color] && CARD_COLORS[node.color].cls) { card.classList.add(CARD_COLORS[node.color].cls); }
 
   // Кнопки действий — сверху справа (вариант Б), текст заголовка сдвинут
   if (canEdit()) {
