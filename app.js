@@ -4,7 +4,8 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v42';
+const LAST_MAP_KEY = 'kics_last_map_id';
+const APP_VERSION = 'v43';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -201,7 +202,12 @@ async function loadMaps() {
     return;
   }
 
-  var preferred = state.maps.find(function (m) { return m.is_owner; }) || state.maps[0];
+  // Восстанавливаем последнюю выбранную таблицу, иначе — первую свою
+  var lastId = null;
+  try { lastId = localStorage.getItem(LAST_MAP_KEY); } catch (e) {}
+  var preferred = (lastId && state.maps.find(function (m) { return m.id === lastId; }))
+    || state.maps.find(function (m) { return m.is_owner; })
+    || state.maps[0];
   await loadMap(preferred.id);
 }
 
@@ -211,6 +217,7 @@ async function loadMap(mapId) {
   var { data, error } = await sb.from('maps').select('*').eq('id', mapId).maybeSingle();
   if (error || !data) { showError('не удалось загрузить таблицу'); return; }
   applyMap(data, !!meta.is_owner);
+  try { localStorage.setItem(LAST_MAP_KEY, mapId); } catch (e) {}
   renderMapSelector();
   render();
 }
@@ -1006,6 +1013,8 @@ function openCardView(id) {
   var n = getNodeById(id);
   if (!n) return;
   document.getElementById('cardViewTitle').textContent = n.title || 'Без названия';
+  document.getElementById('cardViewTitle').style.whiteSpace = 'normal';
+  document.getElementById('cardViewTitle').style.wordBreak = 'break-word';
   var body = document.getElementById('cardViewBody');
   body.innerHTML = '';
   body.style.whiteSpace = 'pre-wrap';

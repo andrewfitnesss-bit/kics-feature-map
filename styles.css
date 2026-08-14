@@ -393,7 +393,8 @@ body {
 .card-blue { background:#eef4fc; border-color:#d4e2f3; }
 .card:hover { box-shadow:var(--shadow-md); border-color:var(--text-tertiary); transform:translateY(-1px); }
 .card:active { transform:scale(0.985); }
-.card-title { font-size:14px; font-weight:600; line-height:1.3; word-break:break-word; padding-right:90px; }
+.card-title { font-size:14px; font-weight:600; line-height:1.3; word-break:break-word; overflow-wrap:anywhere; padding-right:90px; }
+.card.view-mode .card-title { padding-right:0; }
 .card-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 
 .status-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; white-space:nowrap; }
