@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v36';
+const APP_VERSION = 'v37';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -758,6 +758,7 @@ function renderCardBlock(node, depth) {
 
 function createCardElement(node) {
   var card = document.createElement('div'); card.className = 'card'; card.dataset.nodeId = node.id;
+  if (!canEdit()) { card.classList.add('view-mode'); }
 
   // Кнопки действий — сверху справа (вариант Б), текст заголовка сдвинут
   if (canEdit()) {
