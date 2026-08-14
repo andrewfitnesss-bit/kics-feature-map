@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v37';
+const APP_VERSION = 'v39';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -836,6 +836,7 @@ function createCardElement(node) {
   if (node.note) { var h = document.createElement('div'); h.className = 'card-hint'; h.textContent = node.note; card.appendChild(h); }
 
   if (canEdit()) card.addEventListener('click', function () { openModal(node.id); });
+  else card.addEventListener('click', function () { openCardView(node.id); });
 
   return card;
 }
@@ -977,6 +978,60 @@ function saveModal() {
 // 12. Modal
 // ──────────────────────────────────────
 function populateYearSelect() { var ys = $('#modalYear'); if (!ys) return; ys.innerHTML = '<option value="">—</option>'; var cy = new Date().getFullYear(); for (var y = cy - 2; y <= cy + 5; y++) { var o = document.createElement('option'); o.value = y; o.textContent = y; ys.appendChild(o); } }
+function openCardView(id) {
+  var n = getNodeById(id);
+  if (!n) return;
+  document.getElementById('cardViewTitle').textContent = n.title || 'Без названия';
+  var body = document.getElementById('cardViewBody');
+  body.innerHTML = '';
+  body.style.whiteSpace = 'pre-wrap';
+  body.style.wordBreak = 'break-word';
+
+  // Строка мета
+  var meta = document.createElement('div');
+  meta.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;';
+  var st = document.createElement('span');
+  st.className = 'status-badge ' + SC[n.status];
+  st.innerHTML = '<span class="status-dot ' + SD[n.status] + '"></span>' + SL[n.status];
+  meta.appendChild(st);
+  if (n.dueDate) {
+    var d = document.createElement('span');
+    d.className = 'due-chip';
+    d.textContent = n.dueDate;
+    meta.appendChild(d);
+  }
+  body.appendChild(meta);
+
+  // Теги
+  if (n.tags && n.tags.length) {
+    var tags = document.createElement('div');
+    tags.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;';
+    n.tags.forEach(function (t) {
+      var chip = document.createElement('span');
+      chip.className = 'card-tag';
+      chip.textContent = t;
+      tags.appendChild(chip);
+    });
+    body.appendChild(tags);
+  }
+
+  // Детали (с кликабельными ссылками)
+  if (n.note) {
+    var note = document.createElement('div');
+    note.style.cssText = 'color:var(--text);font-size:14px;line-height:1.6;';
+    // Преобразуем URL в кликабельные ссылки
+    var html = eh(n.note).replace(/(https?:\/\/[^\s<>]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    note.innerHTML = html;
+    body.appendChild(note);
+  }
+
+  document.getElementById('cardViewOverlay').style.display = 'flex';
+}
+
+function closeCardView() {
+  document.getElementById('cardViewOverlay').style.display = 'none';
+}
+
 function openModal(id) {
   var n = getNodeById(id); if (!n || !canEdit()) return;
   state.editingNodeId = id; $('#modalTitle').value = n.title; $('#modalTags').value = n.tags.join(', ');
@@ -1042,6 +1097,10 @@ function initEvents() {
   $('#modalOverlay').addEventListener('click', function (e) { if (e.target === $('#modalOverlay')) closeModal(); });
   $('#modalSave').addEventListener('click', saveModal);
   $('#modalDelete').addEventListener('click', function () { var id = state.editingNodeId; closeModal(); if (id) deleteNode(id); });
+
+  // Просмотр карточки (read-only модалка)
+  $('#cardViewClose').addEventListener('click', closeCardView);
+  $('#cardViewOverlay').addEventListener('click', function (e) { if (e.target === $('#cardViewOverlay')) closeCardView(); });
 
   // Share
   $('#shareBtn').addEventListener('click', function () { $('#shareOverlay').style.display = 'flex'; loadShareList(); });
