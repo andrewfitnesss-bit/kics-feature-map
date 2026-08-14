@@ -841,15 +841,15 @@ function alignHeaders() {
     if (cardEl && cardEl.classList.contains('card')) {
       var r = cardEl.getBoundingClientRect();
       headers[ci].style.left = (r.left - cr.left) + 'px';
-      headers[ci].style.width = r.width + 'px';
-      prevRight = r.right - cr.left;
+      headers[ci].style.width = Math.max(100, r.width - 10) + 'px';
+      prevRight = r.right - cr.left + 8;
     } else if (prevRight !== null) {
       headers[ci].style.left = prevRight + 'px';
-      headers[ci].style.width = '260px';
+      headers[ci].style.width = '252px';
       prevRight = prevRight + 268;
     } else {
       headers[ci].style.left = (ci * 268) + 'px';
-      headers[ci].style.width = '260px';
+      headers[ci].style.width = '252px';
       prevRight = ci * 268 + 268;
     }
   }

@@ -395,7 +395,7 @@ body {
 
 .card-tags { display:flex; gap:4px; flex-wrap:wrap; }
 .card-tag { font-size:10px; font-weight:500; padding:1px 7px; border-radius:10px; background:var(--accent-light); color:var(--accent); white-space:nowrap; }
-.card-hint { font-size:11px; color:var(--text-tertiary); }
+.card-hint { font-size:11px; color:var(--text-tertiary); white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; min-width:0; }
 
 .card-actions { position:absolute; top:8px; right:8px; display:flex; gap:2px; opacity:0; transition:opacity var(--transition); z-index:3; }
 .card:hover .card-actions { opacity:1; }
