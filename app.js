@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v34';
+const APP_VERSION = 'v36';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -12,6 +12,8 @@ const APP_VERSION = 'v34';
 let sb = null;
 let currentUser = null;
 let isOwner = true;
+let viewMode = false;
+function canEdit() { return isOwner && !viewMode; }
 
 // ──────────────────────────────────────
 // 2. State
@@ -421,7 +423,7 @@ function renderMapSelector() {
     sel.appendChild(o);
   });
   var delBtn = document.getElementById('deleteMapBtn');
-  if (delBtn) delBtn.style.display = isOwner ? 'flex' : 'none';
+  if (delBtn) delBtn.style.display = canEdit() ? 'flex' : 'none';
 }
 
 function applyMap(map, ownerFlag) {
@@ -679,7 +681,7 @@ function renderTagFilterBar() {
     bar.appendChild(clear);
   }
 
-  if (isOwner) {
+  if (canEdit()) {
     var add = document.createElement('span');
     add.className = 'filter-hash filter-add';
     add.textContent = '+ тег';
@@ -706,7 +708,7 @@ function renderColumns() {
     sp.textContent = col.name;
     sp.title = 'Нажми, чтобы переименовать';
     h.appendChild(sp);
-    if (isOwner) {
+    if (canEdit()) {
       sp.contentEditable = 'true';
       sp.addEventListener('blur', function () {
         var v = sp.textContent.trim();
@@ -716,7 +718,7 @@ function renderColumns() {
       sp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); sp.blur(); } });
     }
     var ha = document.createElement('div'); ha.className = 'column-header-actions';
-    if (isOwner) { var btn = document.createElement('button'); btn.className = 'column-header-btn'; btn.textContent = '+'; btn.title = 'Добавить карточку в эту колонку'; btn.addEventListener('click', function (e) { e.stopPropagation(); var n; if (i === 0) { n = createNode(null, 0, 'Новая карточка'); } else { var parents = getNodesByCol(i - 1); if (parents.length === 0) { alert('Сначала создай карточку в колонке «' + state.columns[i - 1].name + '»'); return; } var parent = parents[parents.length - 1]; n = createNode(parent.id, i, 'Новая карточка'); } state.nodes.push(n); rebuildChildren(); scheduleSave(); render(); openModal(n.id); }); ha.appendChild(btn); }
+    if (canEdit()) { var btn = document.createElement('button'); btn.className = 'column-header-btn'; btn.textContent = '+'; btn.title = 'Добавить карточку в эту колонку'; btn.addEventListener('click', function (e) { e.stopPropagation(); var n; if (i === 0) { n = createNode(null, 0, 'Новая карточка'); } else { var parents = getNodesByCol(i - 1); if (parents.length === 0) { alert('Сначала создай карточку в колонке «' + state.columns[i - 1].name + '»'); return; } var parent = parents[parents.length - 1]; n = createNode(parent.id, i, 'Новая карточка'); } state.nodes.push(n); rebuildChildren(); scheduleSave(); render(); openModal(n.id); }); ha.appendChild(btn); }
     h.appendChild(ha); hr.appendChild(h);
   });
   c.appendChild(hr);
@@ -758,7 +760,7 @@ function createCardElement(node) {
   var card = document.createElement('div'); card.className = 'card'; card.dataset.nodeId = node.id;
 
   // Кнопки действий — сверху справа (вариант Б), текст заголовка сдвинут
-  if (isOwner) {
+  if (canEdit()) {
     var ac = document.createElement('div'); ac.className = 'card-actions';
     var ab = document.createElement('button'); ab.className = 'card-action-btn'; ab.textContent = '+'; ab.title = 'Добавить дочернюю карточку'; ab.addEventListener('click', function (e) { e.stopPropagation(); addChildNode(node); }); ac.appendChild(ab);
     var eb = document.createElement('button'); eb.className = 'card-action-btn'; eb.textContent = '\u270e'; eb.title = 'Редактировать'; eb.addEventListener('click', function (e) { e.stopPropagation(); openModal(node.id); }); ac.appendChild(eb);
@@ -772,7 +774,7 @@ function createCardElement(node) {
 
   // Статус — кликабельный чип, выпадающий список
   var sb = document.createElement('span'); sb.className = 'status-badge ' + SC[node.status]; sb.innerHTML = '<span class="status-dot ' + SD[node.status] + '"></span>' + SL[node.status];
-  if (isOwner) {
+  if (canEdit()) {
     sb.classList.add('clickable-chip');
     sb.title = 'Изменить статус';
     sb.addEventListener('click', function (e) {
@@ -792,7 +794,7 @@ function createCardElement(node) {
 
   // Срок — кликабельный чип, выпадающий список
   var ds = document.createElement('span'); ds.className = 'due-chip'; ds.textContent = node.dueDate || 'срок';
-  if (isOwner) {
+  if (canEdit()) {
     ds.classList.add('clickable-chip');
     ds.title = 'Изменить срок / квартал';
     ds.addEventListener('click', function (e) {
@@ -818,11 +820,11 @@ function createCardElement(node) {
 
   card.appendChild(m);
 
-  if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag'; ts.innerHTML = ht(tg); if (isOwner) { ts.title = 'Нажми, чтобы изменить тег'; ts.addEventListener('click', function (e) { e.stopPropagation(); openTagEditor(node.id, tg); }); } td.appendChild(ts); }); card.appendChild(td); }
+  if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag'; ts.innerHTML = ht(tg); if (canEdit()) { ts.title = 'Нажми, чтобы изменить тег'; ts.addEventListener('click', function (e) { e.stopPropagation(); openTagEditor(node.id, tg); }); } td.appendChild(ts); }); card.appendChild(td); }
 
-  if (node.note) { var h = document.createElement('div'); h.className = 'card-hint'; h.textContent = node.note.length > 80 ? node.note.substring(0, 80) + '\u2026' : node.note; card.appendChild(h); }
+  if (node.note) { var h = document.createElement('div'); h.className = 'card-hint'; h.textContent = node.note; card.appendChild(h); }
 
-  if (isOwner) card.addEventListener('click', function () { openModal(node.id); });
+  if (canEdit()) card.addEventListener('click', function () { openModal(node.id); });
 
   return card;
 }
@@ -933,14 +935,14 @@ function syncHeights() {
 // 11. CRUD
 // ──────────────────────────────────────
 function addChildNode(pn) {
-  if (!isOwner) return;
+  if (!canEdit()) return;
   var ni = pn.colIndex + 1;
   if (ni >= state.columns.length) { alert('Сначала добавьте столбец справа'); return; }
   var ch = createNode(pn.id, ni, 'Новая фича'); state.nodes.push(ch); pn.children.push(ch.id);
   scheduleSave(); updateCards(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); }); openModal(ch.id);
 }
 function deleteNode(id) {
-  if (!isOwner) return;
+  if (!canEdit()) return;
   var n = getNodeById(id); if (!n) return; var tr = new Set(); (function coll(x) { tr.add(x.id); getChildren(x.id).forEach(coll); })(n);
   if (tr.size > 1 && !confirm('Удалить карточку и ' + (tr.size - 1) + ' дочерних?')) return;
   state.nodes = state.nodes.filter(function (x) { return !tr.has(x.id); });
@@ -965,7 +967,7 @@ function saveModal() {
 // ──────────────────────────────────────
 function populateYearSelect() { var ys = $('#modalYear'); if (!ys) return; ys.innerHTML = '<option value="">—</option>'; var cy = new Date().getFullYear(); for (var y = cy - 2; y <= cy + 5; y++) { var o = document.createElement('option'); o.value = y; o.textContent = y; ys.appendChild(o); } }
 function openModal(id) {
-  var n = getNodeById(id); if (!n || !isOwner) return;
+  var n = getNodeById(id); if (!n || !canEdit()) return;
   state.editingNodeId = id; $('#modalTitle').value = n.title; $('#modalTags').value = n.tags.join(', ');
   setupTagAutocomplete();
   $('#modalNote').value = n.note; $('#modalStatus').value = n.status; populateYearSelect();
@@ -1044,9 +1046,18 @@ function initEvents() {
   var delMapBtn = document.getElementById('deleteMapBtn');
   if (delMapBtn) delMapBtn.addEventListener('click', function () { deleteMap(); });
 
+  // Переключатель Редактирование / Просмотр
+  var vtBtn = document.getElementById('viewToggleBtn');
+  if (vtBtn) vtBtn.addEventListener('click', function () {
+    viewMode = !viewMode;
+    if (viewMode) { vtBtn.textContent = '✏️ Редактировать'; }
+    else { vtBtn.textContent = '👁 Просмотр'; }
+    render();
+  });
+
   // Board title rename
   var bt = document.getElementById('boardTitle');
-  if (bt && isOwner) {
+  if (bt && canEdit()) {
     bt.title = 'Нажми, чтобы переименовать доску';
     bt.addEventListener('click', function () { bt.contentEditable = 'true'; bt.focus(); });
     bt.addEventListener('blur', function () {
