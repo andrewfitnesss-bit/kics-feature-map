@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v41';
+const APP_VERSION = 'v42';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -64,6 +64,14 @@ function nodeMatchesFilter(node) {
 function isNodeOrDescendantVisible(node) { if (nodeMatchesFilter(node)) return true; for (var i = 0; i < (node.children || []).length; i++) { var c = getNodeById(node.children[i]); if (c && isNodeOrDescendantVisible(c)) return true; } return false; }
 function hasAnyFilter() { if (state.searchQuery) return true; for (var k in state.selectedTags) { if (state.selectedTags[k] && state.selectedTags[k].size > 0) return true; } return false; }
 function getAllTags() { return (state.availableTags || []).slice().sort(); }
+
+// Удаляем из списка теги, которых больше нет ни на одной карточке
+function pruneUnusedTags() {
+  if (!state.availableTags) return;
+  var used = {};
+  state.nodes.forEach(function (n) { (n.tags || []).forEach(function (t) { used[t] = true; }); });
+  state.availableTags = state.availableTags.filter(function (t) { return used[t]; });
+}
 
 // Вычисляем множество видимых при фильтре-хаштеге: тег-узел + родители + дети
 function computeFilterVisibleSet(tag) {
@@ -374,7 +382,9 @@ function openTagEditor(nodeId, oldTag) {
     item.addEventListener('click', function () {
       var idx = node.tags.indexOf(oldTag);
       if (idx !== -1) { node.tags[idx] = t; }
+      pruneUnusedTags();
       box.remove();
+      renderTagFilterBar();
       scheduleSave();
       updateCards(); syncHeights(); alignHeaders();
     });
@@ -395,7 +405,9 @@ function openTagEditor(nodeId, oldTag) {
   del.textContent = 'Удалить тег';
   del.addEventListener('click', function () {
     node.tags = node.tags.filter(function (x) { return x !== oldTag; });
+    pruneUnusedTags();
     box.remove();
+    renderTagFilterBar();
     scheduleSave();
     updateCards(); syncHeights(); alignHeaders();
   });
@@ -967,6 +979,8 @@ function deleteNode(id) {
   if (tr.size > 1 && !confirm('Удалить карточку и ' + (tr.size - 1) + ' дочерних?')) return;
   state.nodes = state.nodes.filter(function (x) { return !tr.has(x.id); });
   state.nodes.forEach(function (x) { x.children = x.children.filter(function (cid) { return !tr.has(cid); }); });
+  pruneUnusedTags();
+  renderTagFilterBar();
   scheduleSave(); updateCards(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
 }
 function saveModal() {
@@ -978,6 +992,7 @@ function saveModal() {
   n.tags.forEach(function (t) { if (state.availableTags.indexOf(t) === -1) state.availableTags.push(t); });
   n.note = $('#modalNote').value.trim(); n.status = $('#modalStatus').value;
   n.color = $('#modalColor').value;
+  pruneUnusedTags();
   var y = $('#modalYear').value, q = $('#modalQuarter').value;
   n.dueDate = (q === 'Now' || q === 'Next' || q === 'Later') ? q : ((y && q) ? (y + ' ' + q) : '');
   closeModal(); scheduleSave(); updateCards(); renderTagFilterBar(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
