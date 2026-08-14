@@ -131,18 +131,13 @@
         <button class="modal-close" id="shareClose">✕</button>
       </div>
       <div class="modal-body">
-        <p class="share-hint">Приглашённый пользователь сможет открыть таблицу после входа.</p>
-        <label>Email</label>
-        <input type="email" id="shareEmail" class="modal-input" placeholder="colleague@example.com">
-        <label>Роль</label>
-        <select id="shareRole" class="modal-select">
-          <option value="viewer">Просмотр</option>
-          <option value="editor">Редактирование</option>
-        </select>
-        <button id="shareAddBtn" class="btn btn-primary">Добавить доступ</button>
-        <hr class="share-divider">
-        <h4 class="share-list-title">Кто имеет доступ</h4>
-        <div id="shareList" class="share-list"></div>
+        <p class="share-hint">Любой, у кого есть эта ссылка, откроет таблицу в режиме просмотра.</p>
+        <label>Ссылка для просмотра</label>
+        <div class="share-link-row">
+          <input type="text" id="shareLink" class="modal-input" readonly placeholder="Нажми «Сгенерировать ссылку»">
+          <button id="shareCopyBtn" class="btn btn-secondary">Копировать</button>
+        </div>
+        <button id="shareGenerateBtn" class="btn btn-primary">Сгенерировать ссылку</button>
       </div>
       <div class="modal-footer">
         <button id="shareDone" class="btn btn-primary">Готово</button>

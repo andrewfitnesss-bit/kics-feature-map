@@ -586,6 +586,8 @@ async function initAuth() {
 async function afterLogin() {
   $('#userEmail').textContent = currentUser.email;
   showApp();
+  // Если пришли по share-ссылке — пробуем открыть таблицу по токену
+  try { await tryLoadSharedMap(); } catch (e) {}
   try {
     await loadMaps();
   } catch (e) {
@@ -594,45 +596,53 @@ async function afterLogin() {
   }
 }
 
+async function tryLoadSharedMap() {
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('share');
+  if (!token || !sb) return;
+  var { data, error } = await sb.from('maps').select('*').eq('share_token', token).maybeSingle();
+  if (error || !data) { showError('Ссылка недействительна или таблица не найдена'); return; }
+  applyMap(data, false);
+  viewMode = true;
+  renderMapSelector();
+  render();
+}
+
 // ──────────────────────────────────────
 // 8. Share flow
 // ──────────────────────────────────────
 async function loadShareList() {
-  var list = $('#shareList');
-  if (!state.mapId) { list.innerHTML = ''; return; }
-  var { data, error } = await sb.from('map_shares').select('*').eq('map_id', state.mapId).order('created_at');
-  list.innerHTML = '';
-  if (error) return;
-  if (!data || data.length === 0) {
-    list.innerHTML = '<div class="share-hint">Пока никого нет.</div>';
-    return;
+  // Загружаем текущий share_token и формируем ссылку
+  var link = document.getElementById('shareLink');
+  if (!link) return;
+  if (!state.mapId) { link.value = ''; return; }
+  var { data, error } = await sb.from('maps').select('share_token').eq('id', state.mapId).maybeSingle();
+  if (!error && data && data.share_token) {
+    link.value = window.location.origin + window.location.pathname + '?share=' + data.share_token;
+  } else {
+    link.value = '';
   }
-  data.forEach(function (s) {
-    var item = document.createElement('div');
-    item.className = 'share-item';
-
-    var email = document.createElement('span'); email.className = 'share-item-email'; email.textContent = s.email;
-    var role = document.createElement('span'); role.className = 'share-item-role'; role.textContent = s.role === 'editor' ? 'редактирование' : 'просмотр';
-    var rm = document.createElement('button'); rm.className = 'share-item-remove'; rm.textContent = '\u2715';
-    rm.addEventListener('click', function () { removeShare(s.id); });
-
-    item.appendChild(email); item.appendChild(role); item.appendChild(rm);
-    list.appendChild(item);
-  });
 }
-async function addShare() {
-  var email = $('#shareEmail').value.trim().toLowerCase();
-  var role = $('#shareRole').value;
-  if (!email || email.indexOf('@') === -1) { alert('Введи корректный email'); return; }
+
+async function generateShare() {
   if (!state.mapId) return;
-  var { error } = await sb.from('map_shares').upsert({ map_id: state.mapId, owner_id: currentUser.id, email, role }, { onConflict: 'map_id,email' });
-  if (error) { alert('Не удалось добавить доступ: ' + error.message); return; }
-  $('#shareEmail').value = '';
+  var token = 'm' + Math.random().toString(36).slice(2, 14) + Date.now().toString(36);
+  var { error } = await sb.from('maps').update({ share_token: token }).eq('id', state.mapId);
+  if (error) { showError('не удалось создать ссылку: ' + error.message); return; }
   await loadShareList();
 }
-async function removeShare(id) {
-  var { error } = await sb.from('map_shares').delete().eq('id', id);
-  if (!error) await loadShareList();
+
+async function copyShare() {
+  var link = document.getElementById('shareLink');
+  if (!link || !link.value) return;
+  try {
+    await navigator.clipboard.writeText(link.value);
+    alert('Ссылка скопирована');
+  } catch (e) {
+    link.select();
+    document.execCommand('copy');
+    alert('Ссылка скопирована');
+  }
 }
 
 // ──────────────────────────────────────
@@ -1037,7 +1047,8 @@ function initEvents() {
   $('#shareBtn').addEventListener('click', function () { $('#shareOverlay').style.display = 'flex'; loadShareList(); });
   $('#shareClose').addEventListener('click', function () { $('#shareOverlay').style.display = 'none'; });
   $('#shareDone').addEventListener('click', function () { $('#shareOverlay').style.display = 'none'; });
-  $('#shareAddBtn').addEventListener('click', addShare);
+  $('#shareGenerateBtn').addEventListener('click', generateShare);
+  $('#shareCopyBtn').addEventListener('click', copyShare);
 
   // Map selector
   var mapSel = document.getElementById('mapSelect');
