@@ -4,7 +4,7 @@
  */
 
 const LS_KEY = 'kics_feature_map';
-const APP_VERSION = 'v39';
+const APP_VERSION = 'v41';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -40,7 +40,7 @@ let nextId = 1;
 function nid() { return 'n' + (nextId++); }
 
 function createNode(parentId, colIndex, title) {
-  return { id: nid(), parentId: parentId || null, colIndex, title: title || '', tags: [], status: 'none', dueDate: '', note: '', children: [] };
+  return { id: nid(), parentId: parentId || null, colIndex, title: title || '', tags: [], status: 'none', dueDate: '', note: '', color: 'none', children: [] };
 }
 
 // ──────────────────────────────────────
@@ -100,6 +100,13 @@ function isNodeVisible(node) {
 
 var $ = function (s) { return document.querySelector(s); }, $$ = function (s) { return document.querySelectorAll(s); };
 var SL = { done: 'Реализовано', wip: 'В работе', planned: 'Запланировано', none: 'Не начато' };
+var CARD_COLORS = {
+  none: { label: 'Без цвета', cls: '' },
+  green: { label: 'Зелёный', cls: 'card-green' },
+  orange: { label: 'Оранжевый', cls: 'card-orange' },
+  red: { label: 'Красный', cls: 'card-red' },
+  blue: { label: 'Голубой', cls: 'card-blue' }
+};
 var SC = { done: 'status-done', wip: 'status-wip', planned: 'status-planned', none: 'status-none' };
 var SD = { done: 'status-dot-done', wip: 'status-dot-wip', planned: 'status-dot-planned', none: 'status-dot-none' };
 function ht(t) { if (!state.searchQuery) return eh(t); var q = state.searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return eh(t).replace(new RegExp('(' + q + ')', 'gi'), '<mark>$1</mark>'); }
@@ -769,6 +776,7 @@ function renderCardBlock(node, depth) {
 function createCardElement(node) {
   var card = document.createElement('div'); card.className = 'card'; card.dataset.nodeId = node.id;
   if (!canEdit()) { card.classList.add('view-mode'); }
+  if (node.color && CARD_COLORS[node.color]) { card.classList.add(CARD_COLORS[node.color].cls); }
 
   // Кнопки действий — сверху справа (вариант Б), текст заголовка сдвинут
   if (canEdit()) {
@@ -969,6 +977,7 @@ function saveModal() {
   if (!state.availableTags) state.availableTags = [];
   n.tags.forEach(function (t) { if (state.availableTags.indexOf(t) === -1) state.availableTags.push(t); });
   n.note = $('#modalNote').value.trim(); n.status = $('#modalStatus').value;
+  n.color = $('#modalColor').value;
   var y = $('#modalYear').value, q = $('#modalQuarter').value;
   n.dueDate = (q === 'Now' || q === 'Next' || q === 'Later') ? q : ((y && q) ? (y + ' ' + q) : '');
   closeModal(); scheduleSave(); updateCards(); renderTagFilterBar(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
@@ -1036,7 +1045,7 @@ function openModal(id) {
   var n = getNodeById(id); if (!n || !canEdit()) return;
   state.editingNodeId = id; $('#modalTitle').value = n.title; $('#modalTags').value = n.tags.join(', ');
   setupTagAutocomplete();
-  $('#modalNote').value = n.note; $('#modalStatus').value = n.status; populateYearSelect();
+  $('#modalNote').value = n.note; $('#modalStatus').value = n.status; $('#modalColor').value = n.color || 'none'; populateYearSelect();
   if (n.dueDate === 'Now' || n.dueDate === 'Next' || n.dueDate === 'Later') {
     $('#modalYear').value = ''; $('#modalQuarter').value = n.dueDate;
   } else {
