@@ -381,7 +381,9 @@ body {
 /* ---- Card-block ---- */
 .card-block { display:flex; flex-direction:row; align-items:stretch; gap:8px; }
 .card-block > .card { flex-shrink:0; width:260px; align-self:stretch; }
+.card-block > .comment-cell { flex-shrink:0; width:360px; align-self:stretch; }
 .sub-column { display:flex; flex-direction:column; gap:10px; flex:1; padding-left:8px; }
+.sub-column > .comment-cell { flex:1; }
 .sub-column > .card-block { flex:1; }
 .sub-column > .empty-slot { flex:1; display:flex; align-items:center; justify-content:center; pointer-events:none; user-select:none; }
 
@@ -516,6 +518,49 @@ body {
 .card-action-btn.danger:hover { background:var(--red); color:#fff; border-color:var(--red); }
 
 .empty-slot { border:2px dashed var(--border); border-radius:var(--radius); padding:16px 14px; text-align:center; color:var(--text-tertiary); font-size:12px; min-height:50px; display:flex; align-items:center; justify-content:center; }
+
+/* Ячейка комментария */
+.comment-cell {
+  border-radius: 14px;
+  padding: 12px 14px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  transition: all var(--transition);
+}
+.comment-cell.comment-empty {
+  border: 2px dashed var(--border);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  justify-content: center;
+  background: transparent;
+}
+.comment-cell.comment-empty:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.comment-cell.comment-filled {
+  background: #fbfbfd;
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  align-items: flex-start;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.comment-cell.comment-filled:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+.comment-text {
+  width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 
 /* ---- Выпадающий список тегов в модалке ---- */
 .tag-autocomplete {
