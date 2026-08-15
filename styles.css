@@ -363,6 +363,7 @@ body {
 /* ---- Column headers row ---- */
 .columns-headers { position:relative; padding:0 10px 6px; height:36px; z-index:2; }
 .column-header { position:absolute; top:0; left:0; width:260px; height:30px; line-height:30px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-secondary); padding:0 12px; border-bottom:2px solid var(--accent); display:flex; align-items:center; justify-content:space-between; background:var(--bg); }
+.column-header span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .column-header-actions { display:flex; gap:4px; }
 .column-header-btn { background:none; border:none; cursor:pointer; color:var(--text-tertiary); font-size:18px; padding:4px 8px; border-radius:8px; transition:all var(--transition); line-height:1; }
 .column-header-btn:hover { color:var(--accent); background:var(--accent-light); }

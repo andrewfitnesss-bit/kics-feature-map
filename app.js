@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v44';
+const APP_VERSION = 'v45';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -908,13 +908,17 @@ function renderCardBlock(node, depth) {
     var sc = document.createElement('div'); sc.className = 'sub-column';
     children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
     block.appendChild(sc);
-  } else if (isLeaf(node)) {
-    // Лист — справа рисуем ячейку комментария
-    block.appendChild(createCommentCell(node));
   } else if (node.colIndex + 1 < commentColIndex()) {
+    // Есть ещё настоящие столбцы слева от комментария — прокладываем пустой слот
     var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
     var w = document.createElement('div'); w.className = 'sub-column'; w.appendChild(e);
     block.appendChild(w);
+  }
+  // Комментарий всегда справа от своей карточки (если есть запись или это последний настоящий столбец)
+  var hasComment = getCommentFor(node.id);
+  var isLastRealCol = (node.colIndex === lastRealColIndex());
+  if (hasComment || isLastRealCol) {
+    block.appendChild(createCommentCell(node));
   }
   return block;
 }
