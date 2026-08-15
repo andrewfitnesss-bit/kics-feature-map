@@ -328,24 +328,19 @@ async function selectMap(mapId) {
 
 // Добавить столбец перед «Комментарием»
 function addColumn() {
-  if (!canEdit()) return;
+  if (!canEdit()) { alert('Переключитесь в режим редактирования, чтобы создавать столбцы'); return; }
   var name = prompt('Название нового столбца:', 'Новый столбец');
   if (name === null) return;
   name = name.trim() || 'Новый столбец';
 
-  // Вставляем перед колонкой «Комментарий» (последней)
-  var commentCol = state.columns[state.columns.length - 1];
+  // Вставляем новый столбец перед «Комментарием» (последней колонкой)
   var newCol = { id: 'col' + Date.now(), name: name };
   state.columns.splice(state.columns.length - 1, 0, newCol);
 
-  // Обновляем colIndex у всех элементов: сдвиг для комментариев на +1
-  // Новая «настоящая» колонка получает индекс lastRealColIndex();
-  // комментарии остаются на index = columns.length - 1
+  // Перенумеровываем комментарии на новый последний индекс
   var newCommentIndex = state.columns.length - 1;
   state.nodes.forEach(function (n) {
-    if (n.type === 'comment') {
-      n.colIndex = newCommentIndex;
-    }
+    if (n.type === 'comment') { n.colIndex = newCommentIndex; }
   });
 
   rebuildChildren();
@@ -1386,6 +1381,8 @@ function initEvents() {
   // Map selector
   var addColBtn = document.getElementById('addColumnBtn');
   if (addColBtn) addColBtn.addEventListener('click', addColumn);
+  var addColFloat = document.getElementById('addColumnFloat');
+  if (addColFloat) addColFloat.addEventListener('click', addColumn);
   var mapSel = document.getElementById('mapSelect');
   if (mapSel) mapSel.addEventListener('change', function () { selectMap(mapSel.value); });
   var newMapBtn = document.getElementById('newMapBtn');
