@@ -377,14 +377,17 @@ body {
 .column-header span:hover { cursor:pointer; }
 
 /* ---- Content area ---- */
-.column--content { display:flex; flex-direction:column; gap:10px; padding:4px 10px 0; }
+.column--content { display:flex; flex-direction:row; align-items:flex-start; gap:10px; padding:4px 10px 0; }
+
+/* Дерево — слева; колонка комментариев — справа */
+.tree-col { display:flex; flex-direction:column; gap:10px; flex:1; min-width:0; }
+.comments-col { display:flex; flex-direction:column; gap:10px; width:260px; flex-shrink:0; }
+.comments-col .card { width:100%; }
 
 /* ---- Card-block ---- */
 .card-block { display:flex; flex-direction:row; align-items:stretch; gap:8px; }
 .card-block > .card { flex-shrink:0; width:260px; align-self:stretch; }
-.card-block > .comment-cell { flex-shrink:0; width:360px; align-self:stretch; }
 .sub-column { display:flex; flex-direction:column; gap:10px; flex:1; padding-left:8px; }
-.sub-column > .comment-cell { flex:1; }
 .sub-column > .card-block { flex:1; }
 .sub-column > .empty-slot { flex:1; display:flex; align-items:center; justify-content:center; pointer-events:none; user-select:none; }
 

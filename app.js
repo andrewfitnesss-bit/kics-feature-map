@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v46';
+const APP_VERSION = 'v48';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -878,19 +878,25 @@ function renderColumns() {
 }
 
 function updateCardsContainer() {
-  var cd = document.querySelector('.column--content');
-  if (!cd) { cd = document.createElement('div'); cd.className = 'column--content'; $('#columnsContainer').appendChild(cd); }
-  cd.innerHTML = '';
-  var roots = getNodesByCol(0).filter(function (n) { return !n.parentId; });
-  roots.forEach(function (n) { cd.appendChild(renderCardBlock(n, 0)); });
+  renderContent();
 }
 
 function updateCards() {
-  var existing = document.querySelector('.column--content');
-  if (!existing) { updateCardsContainer(); return; }
-  existing.innerHTML = '';
+  renderContent();
+}
+
+function renderContent() {
+  var cc = $('#columnsContainer');
+  var cd = cc.querySelector('.column--content');
+  if (!cd) { cd = document.createElement('div'); cd.className = 'column--content'; cc.appendChild(cd); }
+  cd.innerHTML = '';
+
+  var tree = document.createElement('div'); tree.className = 'tree-col';
   var roots = getNodesByCol(0).filter(function (n) { return !n.parentId; });
-  roots.forEach(function (n) { existing.appendChild(renderCardBlock(n, 0)); });
+  roots.forEach(function (n) { tree.appendChild(renderCardBlock(n, 0)); });
+  cd.appendChild(tree);
+
+  cd.appendChild(renderCommentsColumn());
 }
 
 function renderCardBlock(node, depth) {
@@ -899,59 +905,32 @@ function renderCardBlock(node, depth) {
   if (!isNodeVisible(node)) { block.style.display = 'none'; return block; }
   block.appendChild(createCardElement(node));
   var children = getChildrenInNextCol(node);
-  if (node.colIndex + 1 <= commentColIndex()) {
+  var hasNextRealCol = (node.colIndex + 1 <= lastRealColIndex());
+  if (hasNextRealCol) {
     var sc = document.createElement('div'); sc.className = 'sub-column';
     if (children.length > 0) {
       children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
     } else {
-      sc.appendChild(renderEmptyCommentChain(node.colIndex + 1, node.id));
+      var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
+      sc.appendChild(e);
     }
     block.appendChild(sc);
   }
   return block;
 }
 
-// Строит цепочку пустых слотов от colIndex до колонки «Комментарий»,
-// заканчивающуюся ячейкой комментария напротив карточки leafId.
-function renderEmptyCommentChain(colIndex, leafId) {
-  var block = document.createElement('div');
-  block.className = 'card-block';
-  block.dataset.depth = colIndex;
-  if (colIndex === commentColIndex()) {
-    block.appendChild(createCommentCellById(leafId));
-    return block;
+// Колонка комментариев — вертикальный стек всех комментариев (самый правый столбец)
+function renderCommentsColumn() {
+  var col = document.createElement('div');
+  col.className = 'comments-col';
+  var comments = state.nodes.filter(function (n) { return n.type === 'comment'; });
+  if (comments.length === 0) {
+    var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
+    col.appendChild(e);
+    return col;
   }
-  var empty = document.createElement('div'); empty.className = 'empty-slot'; empty.textContent = '\u2014';
-  block.appendChild(empty);
-  if (colIndex + 1 <= commentColIndex()) {
-    var sc = document.createElement('div'); sc.className = 'sub-column';
-    sc.appendChild(renderEmptyCommentChain(colIndex + 1, leafId));
-    block.appendChild(sc);
-  }
-  return block;
-}
-
-// Ячейка комментария (заполненная или плашка «+ комментарий»)
-function createCommentCellById(leafId) {
-  var cell = document.createElement('div');
-  cell.className = 'comment-cell';
-  var existing = getCommentFor(leafId);
-  if (existing) {
-    cell.classList.add('comment-filled');
-    var t = document.createElement('div'); t.className = 'comment-text'; t.textContent = existing.note || '';
-    cell.appendChild(t);
-    if (canEdit()) {
-      cell.title = 'Изменить комментарий';
-      cell.addEventListener('click', function (e) { e.stopPropagation(); openCommentEditor(existing.id); });
-    }
-  } else {
-    cell.classList.add('comment-empty');
-    var s = document.createElement('span');
-    if (canEdit()) { s.textContent = '+ комментарий'; cell.title = 'Добавить комментарий'; cell.addEventListener('click', function (e) { e.stopPropagation(); addComment(leafId); }); }
-    else { s.textContent = '\u2014'; }
-    cell.appendChild(s);
-  }
-  return cell;
+  comments.forEach(function (c) { col.appendChild(createCommentNodeElement(c)); });
+  return col;
 }
 
 function addComment(leafId) {
@@ -1103,24 +1082,31 @@ function alignHeaders() {
   var headers = $$('.column-header'); if (!headers.length) return;
   var container = $('#columnsContainer'); if (!container) return;
   var cr = container.getBoundingClientRect();
-  var prevRight = null;
+  var step = 276;   // карточка 260 + gap 8 + отступ sub-column 8
+  var headW = 260;
+  var lastCol = state.columns.length - 1;
+
   for (var ci = 0; ci < headers.length; ci++) {
-    var block = container.querySelector('.card-block[data-depth="' + ci + '"]');
-    var cardEl = block ? block.firstElementChild : null;
-    if (cardEl && (cardEl.classList.contains('card') || cardEl.classList.contains('comment-cell'))) {
-      var r = cardEl.getBoundingClientRect();
-      headers[ci].style.left = (r.left - cr.left) + 'px';
-      headers[ci].style.width = Math.max(100, r.width - 10) + 'px';
-      prevRight = r.right - cr.left + 8;
-    } else if (prevRight !== null) {
-      headers[ci].style.left = prevRight + 'px';
-      headers[ci].style.width = '252px';
-      prevRight = prevRight + 268;
+    var left;
+    if (ci === lastCol) {
+      // Колонка «Комментарий» — ищем её блок справа
+      var comments = container.querySelector('.comments-col');
+      if (comments) { left = comments.getBoundingClientRect().left - cr.left; }
+      else {
+        var prev = headers[ci - 1];
+        left = prev ? (parseFloat(prev.style.left) + step) : (ci * step);
+      }
     } else {
-      headers[ci].style.left = (ci * 268) + 'px';
-      headers[ci].style.width = '252px';
-      prevRight = ci * 268 + 268;
+      var block = container.querySelector('.card-block[data-depth="' + ci + '"]');
+      var cardEl = block ? block.firstElementChild : null;
+      if (cardEl) { left = cardEl.getBoundingClientRect().left - cr.left; }
+      else {
+        var p = headers[ci - 1];
+        left = p ? (parseFloat(p.style.left) + step) : (ci * step);
+      }
     }
+    headers[ci].style.left = left + 'px';
+    headers[ci].style.width = headW + 'px';
   }
 }
 
