@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v45';
+const APP_VERSION = 'v46';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -904,31 +904,43 @@ function renderCardBlock(node, depth) {
   if (!isNodeVisible(node)) { block.style.display = 'none'; return block; }
   block.appendChild(createCardElement(node));
   var children = getChildrenInNextCol(node);
-  if (children.length > 0) {
+  if (node.colIndex + 1 <= commentColIndex()) {
     var sc = document.createElement('div'); sc.className = 'sub-column';
-    children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
+    if (children.length > 0) {
+      children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
+    } else {
+      sc.appendChild(renderEmptyCommentChain(node.colIndex + 1, node.id));
+    }
     block.appendChild(sc);
-  } else if (node.colIndex + 1 < commentColIndex()) {
-    // Есть ещё настоящие столбцы слева от комментария — прокладываем пустой слот
-    var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
-    var w = document.createElement('div'); w.className = 'sub-column'; w.appendChild(e);
-    block.appendChild(w);
-  }
-  // Комментарий всегда справа от своей карточки (если есть запись или это последний настоящий столбец)
-  var hasComment = getCommentFor(node.id);
-  var isLastRealCol = (node.colIndex === lastRealColIndex());
-  if (hasComment || isLastRealCol) {
-    block.appendChild(createCommentCell(node));
   }
   return block;
 }
 
-// Ячейка комментария для листа (карточка с комментарием или плашка «+ комментарий»)
-function createCommentCell(leaf) {
+// Строит цепочку пустых слотов от colIndex до колонки «Комментарий»,
+// заканчивающуюся ячейкой комментария напротив карточки leafId.
+function renderEmptyCommentChain(colIndex, leafId) {
+  var block = document.createElement('div');
+  block.className = 'card-block';
+  block.dataset.depth = colIndex;
+  if (colIndex === commentColIndex()) {
+    block.appendChild(createCommentCellById(leafId));
+    return block;
+  }
+  var empty = document.createElement('div'); empty.className = 'empty-slot'; empty.textContent = '\u2014';
+  block.appendChild(empty);
+  if (colIndex + 1 <= commentColIndex()) {
+    var sc = document.createElement('div'); sc.className = 'sub-column';
+    sc.appendChild(renderEmptyCommentChain(colIndex + 1, leafId));
+    block.appendChild(sc);
+  }
+  return block;
+}
+
+// Ячейка комментария (заполненная или плашка «+ комментарий»)
+function createCommentCellById(leafId) {
   var cell = document.createElement('div');
   cell.className = 'comment-cell';
-  cell.dataset.commentFor = leaf.id;
-  var existing = getCommentFor(leaf.id);
+  var existing = getCommentFor(leafId);
   if (existing) {
     cell.classList.add('comment-filled');
     var t = document.createElement('div'); t.className = 'comment-text'; t.textContent = existing.note || '';
@@ -940,7 +952,7 @@ function createCommentCell(leaf) {
   } else {
     cell.classList.add('comment-empty');
     var s = document.createElement('span');
-    if (canEdit()) { s.textContent = '+ комментарий'; cell.title = 'Добавить комментарий'; cell.addEventListener('click', function (e) { e.stopPropagation(); addComment(leaf.id); }); }
+    if (canEdit()) { s.textContent = '+ комментарий'; cell.title = 'Добавить комментарий'; cell.addEventListener('click', function (e) { e.stopPropagation(); addComment(leafId); }); }
     else { s.textContent = '\u2014'; }
     cell.appendChild(s);
   }
@@ -951,7 +963,9 @@ function addComment(leafId) {
   if (!canEdit()) return;
   var leaf = getNodeById(leafId);
   if (!leaf) return;
-  var c = createNode(null, commentColIndex(), '', 'comment');
+  var existing = getCommentFor(leafId);
+  if (existing) { openCommentEditor(existing.id); return; }
+  var c = createNode(leaf.id, commentColIndex(), '', 'comment');
   c.targetId = leafId;
   state.nodes.push(c);
   rebuildChildren();
@@ -989,6 +1003,26 @@ function openCommentEditor(commentId) {
   document.body.appendChild(overlay);
   overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
   ta.focus();
+}
+
+// Рендер узла-комментария как компактной карточки комментария
+function createCommentNodeElement(node) {
+  var card = document.createElement('div');
+  card.className = 'card comment-card';
+  card.dataset.nodeId = node.id;
+
+  var text = document.createElement('div');
+  text.className = 'comment-text';
+  text.textContent = node.note || '(пустой комментарий)';
+  card.appendChild(text);
+
+  if (canEdit()) {
+    card.addEventListener('click', function () { openCommentEditor(node.id); });
+  } else if (node.note) {
+    card.addEventListener('click', function () { openCommentEditor(node.id); });
+  }
+
+  return card;
 }
 
 function createCardElement(node) {
@@ -1078,7 +1112,7 @@ function alignHeaders() {
   for (var ci = 0; ci < headers.length; ci++) {
     var block = container.querySelector('.card-block[data-depth="' + ci + '"]');
     var cardEl = block ? block.firstElementChild : null;
-    if (cardEl && cardEl.classList.contains('card')) {
+    if (cardEl && (cardEl.classList.contains('card') || cardEl.classList.contains('comment-cell'))) {
       var r = cardEl.getBoundingClientRect();
       headers[ci].style.left = (r.left - cr.left) + 'px';
       headers[ci].style.width = Math.max(100, r.width - 10) + 'px';
@@ -1113,8 +1147,16 @@ function syncHeights() {
   }
 
   // Пакетное чтение естественных высот (один раз, без thrash)
+  // Для карточек-комментариев фиксируем высоту, чтобы они НЕ расширяли родителя
   var heights = {};
-  for (var id in elById) heights[id] = elById[id].offsetHeight || DEF_H;
+  for (var id in elById) {
+    var el = elById[id];
+    if (el.classList.contains('comment-card') || el.classList.contains('comment-cell')) {
+      heights[id] = DEF_H;
+    } else {
+      heights[id] = el.offsetHeight || DEF_H;
+    }
+  }
 
   // Проход справа налево
   for (var ci = state.columns.length - 2; ci >= 0; ci--) {

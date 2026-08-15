@@ -529,6 +529,19 @@ body {
   align-items: center;
   font-size: 13px;
   transition: all var(--transition);
+  overflow: hidden;
+}
+.comment-cell.comment-filled {
+  align-items: flex-start;
+  overflow-y: auto;
+}
+.comment-text {
+  width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 88px;
+  overflow-y: auto;
 }
 .comment-cell.comment-empty {
   border: 2px dashed var(--border);
