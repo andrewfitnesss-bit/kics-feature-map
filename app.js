@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v49';
+const APP_VERSION = 'v50';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -885,58 +885,43 @@ function updateCards() {
   renderContent();
 }
 
-// Собираем все пути «корень → лист» в порядке DFS (лист = узел в последней настоящей колонке)
-function getLeafPaths() {
-  var paths = [];
-  var roots = getNodesByCol(0).filter(function (n) { return !n.parentId; });
-  function walk(node, chain) {
-    chain = chain.concat([node]);
-    var children = getChildrenInNextCol(node);
-    if (children.length === 0 || node.colIndex >= lastRealColIndex()) {
-      paths.push(chain);
-      return;
-    }
-    children.forEach(function (c) { walk(c, chain); });
-  }
-  roots.forEach(function (n) { walk(n, []); });
-  return paths;
-}
-
 function renderContent() {
   var cc = $('#columnsContainer');
   var cd = cc.querySelector('.column--content');
   if (!cd) { cd = document.createElement('div'); cd.className = 'column--content'; cc.appendChild(cd); }
   cd.innerHTML = '';
 
-  var paths = getLeafPaths();
-  if (paths.length === 0) {
+  var roots = getNodesByCol(0).filter(function (n) { return !n.parentId; });
+  if (roots.length === 0) {
     var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
     cd.appendChild(e);
     return;
   }
-  paths.forEach(function (path) { cd.appendChild(renderPathRow(path)); });
+  roots.forEach(function (n) { cd.appendChild(renderCardBlock(n, 0)); });
 }
 
-// Один «путь» = горизонтальная строка: карточки уровней слева направо + заметка листа в конце
-function renderPathRow(path) {
-  var row = document.createElement('div'); row.className = 'path-row';
-  var leaf = path[path.length - 1];
-  var byCol = {};
-  path.forEach(function (n) { byCol[n.colIndex] = n; });
+function renderCardBlock(node, depth) {
+  if (depth === undefined) depth = 0;
+  var block = document.createElement('div'); block.className = 'card-block'; block.dataset.nodeId = node.id; block.dataset.depth = depth;
+  if (!isNodeVisible(node)) { block.style.display = 'none'; return block; }
 
-  for (var ci = 0; ci <= commentColIndex(); ci++) {
-    var cell;
-    if (ci === commentColIndex()) {
-      cell = renderCommentCell(leaf.id);
-    } else if (byCol[ci]) {
-      cell = createCardElement(byCol[ci]);
+  block.appendChild(createCardElement(node));
+
+  if (node.colIndex < lastRealColIndex()) {
+    var sc = document.createElement('div'); sc.className = 'sub-column';
+    var children = getChildrenInNextCol(node);
+    if (children.length > 0) {
+      children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
     } else {
-      cell = document.createElement('div'); cell.className = 'empty-slot'; cell.textContent = '\u2014';
+      var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
+      sc.appendChild(e);
     }
-    cell.classList.add('path-cell');
-    row.appendChild(cell);
+    block.appendChild(sc);
+  } else {
+    // Лист (последняя настоящая колонка) — справа его заметка
+    block.appendChild(renderCommentCell(node.id));
   }
-  return row;
+  return block;
 }
 
 // Ячейка заметки для листа (текст или пустая плашка «+ заметка»)
@@ -945,7 +930,7 @@ function renderCommentCell(leafId) {
   if (existing) return createCommentNodeElement(existing);
 
   var cell = document.createElement('div');
-  cell.className = 'comment-cell comment-empty path-cell';
+  cell.className = 'comment-cell comment-empty';
   var s = document.createElement('span');
   if (canEdit()) {
     s.textContent = '+ заметка';
@@ -1109,16 +1094,17 @@ function alignHeaders() {
   var cr = container.getBoundingClientRect();
   var step = 276;   // карточка 260 + gap 8 + отступ sub-column 8
   var headW = 260;
-  // Первая строка путей задаёт позицию каждой колонки (все строки одинаковы слева)
-  var firstRow = container.querySelector('.path-row');
 
   for (var ci = 0; ci < headers.length; ci++) {
-    var cell = firstRow ? firstRow.children[ci] : null;
+    var block = container.querySelector('.card-block[data-depth="' + ci + '"]');
+    var cardEl = block ? block.firstElementChild : null;
     var left;
-    if (cell) { left = cell.getBoundingClientRect().left - cr.left; }
-    else {
-      var prev = headers[ci - 1];
-      left = prev ? (parseFloat(prev.style.left) + step) : (ci * step);
+    if (cardEl && cardEl.classList.contains('card')) {
+      left = cardEl.getBoundingClientRect().left - cr.left;
+    } else if (ci > 0) {
+      left = parseFloat(headers[ci - 1].style.left) + step;
+    } else {
+      left = ci * step;
     }
     headers[ci].style.left = left + 'px';
     headers[ci].style.width = headW + 'px';
