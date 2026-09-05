@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v50';
+const APP_VERSION = 'v51';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1116,10 +1116,12 @@ function syncHeights() {
   // Сброс (пакетная запись)
   var cards = $$('.card');
   for (var i = 0; i < cards.length; i++) cards[i].style.minHeight = '';
+  var commentCells = $$('.comment-cell');
+  for (var c0 = 0; c0 < commentCells.length; c0++) commentCells[c0].style.minHeight = '';
   var emptySlots = $$('.empty-slot');
   for (var e = 0; e < emptySlots.length; e++) emptySlots[e].style.minHeight = '';
 
-  // Кеши: id -> узел и id -> DOM-элемент (убираем O(n²) поиски)
+  // Кеши: id -> узел и id -> DOM-элемент
   var nodeById = {};
   var elById = {};
   state.nodes.forEach(function (n) { nodeById[n.id] = n; });
@@ -1128,67 +1130,46 @@ function syncHeights() {
     if (cid) elById[cid] = cards[k];
   }
 
-  // Пакетное чтение естественных высот (один раз, без thrash)
-  // Для карточек-комментариев фиксируем высоту, чтобы они НЕ расширяли родителя
+  // Естественные высоты карточек (без принудительного выравнивания)
   var heights = {};
-  for (var id in elById) {
-    var el = elById[id];
-    if (el.classList.contains('comment-card') || el.classList.contains('comment-cell')) {
-      heights[id] = DEF_H;
-    } else {
-      heights[id] = el.offsetHeight || DEF_H;
-    }
-  }
+  for (var id in elById) heights[id] = elById[id].offsetHeight || DEF_H;
 
-  // Проход справа налево
-  for (var ci = state.columns.length - 2; ci >= 0; ci--) {
+  // Проход справа налево: родитель растягивается под сумму своих детей,
+  // каждый ребёнок сохраняет свою естественную высоту
+  for (var c = state.columns.length - 1; c >= 0; c--) {
     state.nodes.forEach(function (p) {
-      if (p.colIndex !== ci) return;
+      if (p.type === 'comment' || p.colIndex !== c) return;
       var childIds = [];
       (p.children || []).forEach(function (cid) {
-        var c = nodeById[cid];
-        if (c && c.colIndex === ci + 1 && elById[cid]) childIds.push(cid);
+        var ch = nodeById[cid];
+        if (ch && ch.colIndex === c + 1 && elById[cid]) childIds.push(cid);
       });
+
       var pc = elById[p.id];
+      if (!pc) return;
+
       if (childIds.length === 0) {
-        if (pc && pc.closest) {
-          var bl = pc.closest('.card-block');
-          if (bl) {
-            var es = bl.querySelector('.sub-column > .empty-slot');
-            if (es) es.style.minHeight = (heights[p.id] || DEF_H) + 'px';
+        // Выравниваем соседнюю ячейку (пустой слот ниже / заметку у листа) по высоте карточки
+        var bl = pc.closest('.card-block');
+        if (bl) {
+          var own = heights[p.id] || DEF_H;
+          var es = bl.querySelector('.sub-column > .empty-slot');
+          if (es) { es.style.minHeight = own + 'px'; }
+          else {
+            var cc = bl.querySelector('.comment-cell, .comment-card');
+            if (cc) { cc.style.minHeight = own + 'px'; }
           }
         }
         return;
       }
-      var mx = 0;
-      childIds.forEach(function (cid) { if (heights[cid] > mx) mx = heights[cid]; });
-      childIds.forEach(function (cid) { elById[cid].style.minHeight = mx + 'px'; heights[cid] = mx; });
-      var total = childIds.length * mx + (childIds.length - 1) * GAP;
+
+      var total = 0;
+      childIds.forEach(function (cid) { total += (heights[cid] || DEF_H) + GAP; });
+      total -= GAP;
       var own = heights[p.id] || DEF_H;
       var nh = Math.max(own, total);
       elById[p.id].style.minHeight = nh + 'px';
       heights[p.id] = nh;
-    });
-  }
-
-  // Второй проход: дочка не выше родителя
-  for (var ci2 = state.columns.length - 2; ci2 >= 0; ci2--) {
-    state.nodes.forEach(function (p) {
-      if (p.colIndex !== ci2) return;
-      var childIds = [];
-      (p.children || []).forEach(function (cid) {
-        var c = nodeById[cid];
-        if (c && c.colIndex === ci2 + 1 && elById[cid]) childIds.push(cid);
-      });
-      if (childIds.length === 0) return;
-      var mx = 0;
-      childIds.forEach(function (cid) { if (heights[cid] > mx) mx = heights[cid]; });
-      var ph = heights[p.id] || DEF_H;
-      var ma = Math.floor((ph - (childIds.length - 1) * GAP) / childIds.length);
-      var fh = Math.max(DEF_H, Math.min(mx, ma));
-      childIds.forEach(function (cid) { elById[cid].style.minHeight = fh + 'px'; heights[cid] = fh; });
-      var total = childIds.length * fh + (childIds.length - 1) * GAP;
-      if (total > ph) { elById[p.id].style.minHeight = total + 'px'; heights[p.id] = total; }
     });
   }
 }
