@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v48';
+const APP_VERSION = 'v49';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -885,52 +885,77 @@ function updateCards() {
   renderContent();
 }
 
+// Собираем все пути «корень → лист» в порядке DFS (лист = узел в последней настоящей колонке)
+function getLeafPaths() {
+  var paths = [];
+  var roots = getNodesByCol(0).filter(function (n) { return !n.parentId; });
+  function walk(node, chain) {
+    chain = chain.concat([node]);
+    var children = getChildrenInNextCol(node);
+    if (children.length === 0 || node.colIndex >= lastRealColIndex()) {
+      paths.push(chain);
+      return;
+    }
+    children.forEach(function (c) { walk(c, chain); });
+  }
+  roots.forEach(function (n) { walk(n, []); });
+  return paths;
+}
+
 function renderContent() {
   var cc = $('#columnsContainer');
   var cd = cc.querySelector('.column--content');
   if (!cd) { cd = document.createElement('div'); cd.className = 'column--content'; cc.appendChild(cd); }
   cd.innerHTML = '';
 
-  var tree = document.createElement('div'); tree.className = 'tree-col';
-  var roots = getNodesByCol(0).filter(function (n) { return !n.parentId; });
-  roots.forEach(function (n) { tree.appendChild(renderCardBlock(n, 0)); });
-  cd.appendChild(tree);
-
-  cd.appendChild(renderCommentsColumn());
-}
-
-function renderCardBlock(node, depth) {
-  if (depth === undefined) depth = 0;
-  var block = document.createElement('div'); block.className = 'card-block'; block.dataset.nodeId = node.id; block.dataset.depth = depth;
-  if (!isNodeVisible(node)) { block.style.display = 'none'; return block; }
-  block.appendChild(createCardElement(node));
-  var children = getChildrenInNextCol(node);
-  var hasNextRealCol = (node.colIndex + 1 <= lastRealColIndex());
-  if (hasNextRealCol) {
-    var sc = document.createElement('div'); sc.className = 'sub-column';
-    if (children.length > 0) {
-      children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
-    } else {
-      var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
-      sc.appendChild(e);
-    }
-    block.appendChild(sc);
-  }
-  return block;
-}
-
-// Колонка комментариев — вертикальный стек всех комментариев (самый правый столбец)
-function renderCommentsColumn() {
-  var col = document.createElement('div');
-  col.className = 'comments-col';
-  var comments = state.nodes.filter(function (n) { return n.type === 'comment'; });
-  if (comments.length === 0) {
+  var paths = getLeafPaths();
+  if (paths.length === 0) {
     var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
-    col.appendChild(e);
-    return col;
+    cd.appendChild(e);
+    return;
   }
-  comments.forEach(function (c) { col.appendChild(createCommentNodeElement(c)); });
-  return col;
+  paths.forEach(function (path) { cd.appendChild(renderPathRow(path)); });
+}
+
+// Один «путь» = горизонтальная строка: карточки уровней слева направо + заметка листа в конце
+function renderPathRow(path) {
+  var row = document.createElement('div'); row.className = 'path-row';
+  var leaf = path[path.length - 1];
+  var byCol = {};
+  path.forEach(function (n) { byCol[n.colIndex] = n; });
+
+  for (var ci = 0; ci <= commentColIndex(); ci++) {
+    var cell;
+    if (ci === commentColIndex()) {
+      cell = renderCommentCell(leaf.id);
+    } else if (byCol[ci]) {
+      cell = createCardElement(byCol[ci]);
+    } else {
+      cell = document.createElement('div'); cell.className = 'empty-slot'; cell.textContent = '\u2014';
+    }
+    cell.classList.add('path-cell');
+    row.appendChild(cell);
+  }
+  return row;
+}
+
+// Ячейка заметки для листа (текст или пустая плашка «+ заметка»)
+function renderCommentCell(leafId) {
+  var existing = getCommentFor(leafId);
+  if (existing) return createCommentNodeElement(existing);
+
+  var cell = document.createElement('div');
+  cell.className = 'comment-cell comment-empty path-cell';
+  var s = document.createElement('span');
+  if (canEdit()) {
+    s.textContent = '+ заметка';
+    cell.title = 'Добавить заметку';
+    cell.addEventListener('click', function (e) { e.stopPropagation(); addComment(leafId); });
+  } else {
+    s.textContent = '\u2014';
+  }
+  cell.appendChild(s);
+  return cell;
 }
 
 function addComment(leafId) {
@@ -1084,26 +1109,16 @@ function alignHeaders() {
   var cr = container.getBoundingClientRect();
   var step = 276;   // карточка 260 + gap 8 + отступ sub-column 8
   var headW = 260;
-  var lastCol = state.columns.length - 1;
+  // Первая строка путей задаёт позицию каждой колонки (все строки одинаковы слева)
+  var firstRow = container.querySelector('.path-row');
 
   for (var ci = 0; ci < headers.length; ci++) {
+    var cell = firstRow ? firstRow.children[ci] : null;
     var left;
-    if (ci === lastCol) {
-      // Колонка «Комментарий» — ищем её блок справа
-      var comments = container.querySelector('.comments-col');
-      if (comments) { left = comments.getBoundingClientRect().left - cr.left; }
-      else {
-        var prev = headers[ci - 1];
-        left = prev ? (parseFloat(prev.style.left) + step) : (ci * step);
-      }
-    } else {
-      var block = container.querySelector('.card-block[data-depth="' + ci + '"]');
-      var cardEl = block ? block.firstElementChild : null;
-      if (cardEl) { left = cardEl.getBoundingClientRect().left - cr.left; }
-      else {
-        var p = headers[ci - 1];
-        left = p ? (parseFloat(p.style.left) + step) : (ci * step);
-      }
+    if (cell) { left = cell.getBoundingClientRect().left - cr.left; }
+    else {
+      var prev = headers[ci - 1];
+      left = prev ? (parseFloat(prev.style.left) + step) : (ci * step);
     }
     headers[ci].style.left = left + 'px';
     headers[ci].style.width = headW + 'px';
@@ -1367,8 +1382,6 @@ function initEvents() {
   // Map selector
   var addColBtn = document.getElementById('addColumnBtn');
   if (addColBtn) addColBtn.addEventListener('click', addColumn);
-  var addColFloat = document.getElementById('addColumnFloat');
-  if (addColFloat) addColFloat.addEventListener('click', addColumn);
   var mapSel = document.getElementById('mapSelect');
   if (mapSel) mapSel.addEventListener('change', function () { selectMap(mapSel.value); });
   var newMapBtn = document.getElementById('newMapBtn');
