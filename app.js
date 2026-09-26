@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v51';
+const APP_VERSION = 'v52';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -908,17 +908,17 @@ function renderCardBlock(node, depth) {
   block.appendChild(createCardElement(node));
 
   if (node.colIndex < lastRealColIndex()) {
-    var sc = document.createElement('div'); sc.className = 'sub-column';
     var children = getChildrenInNextCol(node);
     if (children.length > 0) {
+      var sc = document.createElement('div'); sc.className = 'sub-column';
       children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
+      block.appendChild(sc);
     } else {
-      var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
-      sc.appendChild(e);
+      // Строка заканчивается на этой карточке — справа её заметка (в любой колонке)
+      block.appendChild(renderCommentCell(node.id));
     }
-    block.appendChild(sc);
   } else {
-    // Лист (последняя настоящая колонка) — справа его заметка
+    // Последняя настоящая колонка — справа заметка листа
     block.appendChild(renderCommentCell(node.id));
   }
   return block;
