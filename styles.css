@@ -388,14 +388,14 @@ body {
 .sub-column > .empty-slot { flex:1; display:flex; align-items:center; justify-content:center; pointer-events:none; user-select:none; }
 
 /* ---- Card ---- */
-.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; cursor:pointer; transition:all var(--transition); box-shadow:var(--shadow-sm); position:relative; min-height:60px; display:flex; flex-direction:column; gap:6px; overflow:hidden; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; cursor:pointer; transition:all var(--transition); box-shadow:var(--shadow-sm); position:relative; min-height:52px; display:flex; flex-direction:column; gap:5px; overflow:hidden; }
 .card-green { background:#eef7ee; border-color:#d4e8d5; }
 .card-orange { background:#fdf3e7; border-color:#f2e0cb; }
 .card-red { background:#fdeeee; border-color:#f5d4d4; }
 .card-blue { background:#eef4fc; border-color:#d4e2f3; }
 .card:hover { box-shadow:var(--shadow-md); border-color:var(--text-tertiary); transform:translateY(-1px); }
 .card:active { transform:scale(0.985); }
-.card-title { font-size:14px; font-weight:600; line-height:1.3; word-break:break-word; overflow-wrap:anywhere; padding-right:90px; }
+.card-title { font-size:14px; font-weight:600; line-height:1.3; word-break:break-word; overflow-wrap:anywhere; padding-right:72px; }
 .card.view-mode .card-title { padding-right:0; }
 .card-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 
@@ -416,7 +416,7 @@ body {
 .card.view-mode .card-hint { display:block; -webkit-line-clamp:unset; overflow-y:auto; max-height:120px; }
 .card.view-mode .card-hint.no-overflow { overflow-y:hidden; }
 
-.card-actions { position:absolute; top:8px; right:8px; display:flex; gap:2px; opacity:0; transition:opacity var(--transition); z-index:3; }
+.card-actions { position:absolute; top:5px; right:5px; display:flex; gap:2px; opacity:0; transition:opacity var(--transition); z-index:3; }
 .card:hover .card-actions { opacity:1; }
 
 /* Кликабельные чипы статуса/срока */
@@ -513,7 +513,7 @@ body {
   transition: all var(--transition);
 }
 .tag-editor-del:hover { background: var(--red); color: #fff; }
-.card-action-btn { background:var(--surface); border:1px solid var(--border); cursor:pointer; width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--text-secondary); transition:all var(--transition); }
+.card-action-btn { background:var(--surface); border:1px solid var(--border); cursor:pointer; width:20px; height:20px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--text-secondary); transition:all var(--transition); }
 .card-action-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
 .card-action-btn.danger:hover { background:var(--red); color:#fff; border-color:var(--red); }
 
