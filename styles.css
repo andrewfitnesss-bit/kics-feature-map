@@ -382,6 +382,7 @@ body {
 .card-block { display:flex; flex-direction:row; align-items:stretch; gap:8px; }
 .card-block > .card { flex-shrink:0; width:260px; align-self:stretch; }
 .card-block > .comment-cell { flex-shrink:0; width:260px; align-self:stretch; }
+.card-block > .note-spacer { flex-shrink:0; width:260px; align-self:stretch; }
 .sub-column { display:flex; flex-direction:column; gap:10px; flex:1; padding-left:8px; }
 .sub-column > .card-block { flex:1; }
 .sub-column > .empty-slot { flex:1; display:flex; align-items:center; justify-content:center; pointer-events:none; user-select:none; }

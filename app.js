@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v52';
+const APP_VERSION = 'v53';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -907,21 +907,34 @@ function renderCardBlock(node, depth) {
 
   block.appendChild(createCardElement(node));
 
-  if (node.colIndex < lastRealColIndex()) {
-    var children = getChildrenInNextCol(node);
-    if (children.length > 0) {
-      var sc = document.createElement('div'); sc.className = 'sub-column';
-      children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
-      block.appendChild(sc);
-    } else {
-      // Строка заканчивается на этой карточке — справа её заметка (в любой колонке)
-      block.appendChild(renderCommentCell(node.id));
-    }
+  var children = (node.colIndex < lastRealColIndex()) ? getChildrenInNextCol(node) : [];
+  if (children.length > 0) {
+    var sc = document.createElement('div'); sc.className = 'sub-column';
+    children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
+    block.appendChild(sc);
   } else {
-    // Последняя настоящая колонка — справа заметка листа
-    block.appendChild(renderCommentCell(node.id));
+    // Строка заканчивается здесь — дотягиваем пустыми колонками до «Заметки», заметка в своём столбце
+    var tail = document.createElement('div'); tail.className = 'sub-column';
+    tail.appendChild(renderNoteChain(node.id, node.colIndex + 1));
+    block.appendChild(tail);
   }
   return block;
+}
+
+// Дотягиваем строку-лист до колонки «Заметки»: пустые колонки-заглушки + заметка в своём столбце
+function renderNoteChain(leafId, col) {
+  var b = document.createElement('div'); b.className = 'card-block';
+  if (col > lastRealColIndex()) {
+    // Колонка «Заметки» — сама заметка (стоит напротив своей карточки)
+    b.appendChild(renderCommentCell(leafId));
+    return b;
+  }
+  var sp = document.createElement('div'); sp.className = 'note-spacer';
+  b.appendChild(sp);
+  var sc = document.createElement('div'); sc.className = 'sub-column';
+  sc.appendChild(renderNoteChain(leafId, col + 1));
+  b.appendChild(sc);
+  return b;
 }
 
 // Ячейка заметки для листа (текст или пустая плашка «+ заметка»)
