@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v57';
+const APP_VERSION = 'v58';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1422,9 +1422,14 @@ function mindmapLayout(tree) {
   tree.roots.forEach(function (r) { calcDepth(r, 1); });
   if (maxDepth < 1) maxDepth = 1;
 
-  // Шаг радиуса такой, чтобы внешнее кольцо (листья) вместило все листья с зазором unit
-  var R = (L * unit) / (2 * Math.PI * maxDepth);
-  if (R < 200) R = 200;
+  // Адаптивный радиус: каждый уровень достаточно большой для своего количества узлов
+  var countAtLevel = {};
+  Object.keys(depth).forEach(function (id) { countAtLevel[depth[id]] = (countAtLevel[depth[id]] || 0) + 1; });
+  var radius = { 0: 0 };
+  for (var d = 1; d <= maxDepth; d++) {
+    var needed = (countAtLevel[d] || 1) * unit * 1.1 / (2 * Math.PI);
+    radius[d] = Math.max((radius[d - 1] || 0) + unit, needed);
+  }
 
   // Листья получают слоты 0..L-1; внутренний узел — середина диапазона своих листьев
   var lo = {}, hi = {}, order = 0;
@@ -1435,13 +1440,38 @@ function mindmapLayout(tree) {
   }
   tree.roots.forEach(assign);
 
+  var ang = {};
+  Object.keys(depth).forEach(function (id) {
+    var mid = (lo[id] + hi[id]) / 2;
+    ang[id] = (mid / L) * 2 * Math.PI - Math.PI / 2;
+  });
+
+  // Раздвигаем слишком близкие узлы на одном уровне (с учётом перехода через круг)
+  for (var dd = 1; dd <= maxDepth; dd++) {
+    var ids = Object.keys(depth).filter(function (id) { return depth[id] === dd; }).sort(function (a, b) { return ang[a] - ang[b]; });
+    var n = ids.length;
+    if (n < 2) continue;
+    var minGap = unit / radius[dd];
+    var bestGap = -1, bestIdx = 0;
+    for (var i = 0; i < n; i++) {
+      var nxt = (i + 1) % n;
+      var g = ang[ids[nxt]] - ang[ids[i]];
+      if (i === n - 1) g += 2 * Math.PI;
+      if (g > bestGap) { bestGap = g; bestIdx = nxt; }
+    }
+    var ordered = [];
+    for (var i2 = 0; i2 < n; i2++) ordered.push(ids[(bestIdx + i2) % n]);
+    for (var i3 = 1; i3 < n; i3++) {
+      var need = ang[ordered[i3 - 1]] + minGap;
+      if (ang[ordered[i3]] < need) ang[ordered[i3]] = need;
+    }
+  }
+
   var nodes = [];
   Object.keys(depth).forEach(function (id) {
-    var isLeaf = !(tree.children[id] && tree.children[id].length);
-    var r = isLeaf ? maxDepth * R : depth[id] * R;
-    var mid = (lo[id] + hi[id]) / 2;
-    var a = (mid / L) * 2 * Math.PI - Math.PI / 2;
-    nodes.push({ id: id, level: depth[id], x: r * Math.cos(a), y: r * Math.sin(a), node: tree.byId[id] });
+    var d = depth[id];
+    var rr = radius[d];
+    nodes.push({ id: id, level: d, x: rr * Math.cos(ang[id]), y: rr * Math.sin(ang[id]), node: tree.byId[id] });
   });
 
   var pos = {};
@@ -1455,7 +1485,7 @@ function mindmapLayout(tree) {
     });
   });
 
-  return { nodes: nodes, links: links, R: R };
+  return { nodes: nodes, links: links, R: radius[1] };
 }
 
 function buildMindmap() {
@@ -1522,7 +1552,7 @@ function initialMindmapView() {
   var R = mm.R || 600;
   var span = 2 * (R + mm.NODE_W);
   var scale = Math.min(canvas.clientWidth, canvas.clientHeight) / span;
-  scale = Math.max(0.15, Math.min(1.1, scale));
+  scale = Math.max(0.55, Math.min(1.0, scale));
   mm.scale = scale;
   mm.tx = canvas.clientWidth / 2;
   mm.ty = canvas.clientHeight / 2;
