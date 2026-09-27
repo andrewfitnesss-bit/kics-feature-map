@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230071e3'/%3E%3Ctext x='8' y='12' font-size='10' text-anchor='middle' fill='white'%3EK%3C/text%3E%3C/svg%3E">
   <title>Карта фич ИБ‑продукта</title>
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
   <!-- Supabase JS (v2) — локальная копия, чтобы не грузить с CDN -->
@@ -57,7 +57,6 @@
           <button id="addColumnBtn" class="btn btn-secondary" title="Добавить столбец">➕ Колонка</button>
           <button id="shareBtn" class="btn btn-secondary" title="Поделиться">🔗 Поделиться</button>
           <button id="viewToggleBtn" class="btn btn-secondary" title="Режим просмотра/редактирования">👁 Просмотр</button>
-          <button id="mindmapBtn" class="btn btn-secondary" title="Режим майндкарты">🧠 Майндкарта</button>
           <div class="user-chip" id="userChip">
             <div class="user-info">
               <span id="userEmail" class="user-email"></span>
@@ -166,29 +165,9 @@
     </div>
   </div>
 
-  <!-- Майндкарта -->
-  <div id="mindmapOverlay" class="mindmap-overlay" style="display:none">
-    <div class="mindmap-topbar">
-      <div class="mindmap-title" id="mindmapTitle"></div>
-      <div class="mindmap-controls">
-        <div class="mindmap-style-toggle" id="mindmapStyleToggle" title="Стиль текста">
-          <button class="mindmap-style-btn active" data-style="B" title="Подписи у концов веток">Подписи</button>
-          <button class="mindmap-style-btn" data-style="A" title="Текст вдоль ветвей">Вдоль ветвей</button>
-        </div>
-        <button id="mindmapZoomIn" class="mindmap-ctl" title="Приблизить">＋</button>
-        <button id="mindmapZoomOut" class="mindmap-ctl" title="Отдалить">－</button>
-        <button id="mindmapFit" class="mindmap-ctl" title="Показать целиком">⤢</button>
-        <button id="mindmapClose" class="mindmap-ctl" title="Закрыть">✕</button>
-      </div>
-    </div>
-    <div class="mindmap-canvas" id="mindmapCanvas">
-      <svg class="mindmap-svg" id="mindmapSvg"></svg>
-    </div>
-  </div>
-
   <!-- Версия приложения — всегда видна в правом нижнем углу -->
   <div id="versionBadge" class="version-fixed" title="Версия приложения"></div>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
