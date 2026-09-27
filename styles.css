@@ -642,14 +642,14 @@ mark { background:#ffeb3b; color:#1d1d1f; border-radius:2px; padding:0 1px; }
 .mindmap-svg { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
 .mindmap-link { fill:none; stroke:#c9c9d2; stroke-width:2; stroke-linecap:round; }
 .mindmap-nodes { position:absolute; top:0; left:0; width:0; height:0; overflow:visible; }
-.mindmap-node { position:absolute; transform:translate(-50%,-50%); width:150px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:8px 10px; box-shadow:var(--shadow-sm); transition:box-shadow var(--transition); }
+.mindmap-node { position:absolute; transform:translate(-50%,-50%); width:190px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 12px; box-shadow:var(--shadow-sm); transition:box-shadow var(--transition); }
 .mindmap-node:hover { box-shadow:var(--shadow-md); }
-.mindmap-node-title { font-size:12px; font-weight:600; line-height:1.3; word-break:break-word; overflow-wrap:anywhere; max-height:3.2em; overflow:hidden; color:var(--text); }
-.mindmap-node-note { font-size:10px; color:var(--text-tertiary); margin-top:3px; max-height:2.6em; overflow:hidden; line-height:1.3; }
-.mindmap-node-meta { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--text-secondary); margin-top:4px; }
-.mindmap-node-root { width:180px; border-width:2px; box-shadow:var(--shadow-md); }
-.mindmap-node-center { width:200px; background:var(--accent); border-color:var(--accent); box-shadow:var(--shadow-lg); }
-.mindmap-node-center .mindmap-node-title { color:#fff; font-size:14px; text-align:center; max-height:none; }
+.mindmap-node-title { font-size:14px; font-weight:600; line-height:1.3; word-break:break-word; overflow-wrap:anywhere; max-height:4em; overflow:hidden; color:var(--text); }
+.mindmap-node-note { font-size:11px; color:var(--text-tertiary); margin-top:4px; max-height:2.6em; overflow:hidden; line-height:1.3; }
+.mindmap-node-meta { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--text-secondary); margin-top:5px; }
+.mindmap-node-root { width:230px; border-width:2px; box-shadow:var(--shadow-md); }
+.mindmap-node-center { width:250px; background:var(--accent); border-color:var(--accent); box-shadow:var(--shadow-lg); }
+.mindmap-node-center .mindmap-node-title { color:#fff; font-size:16px; text-align:center; max-height:none; }
 .mindmap-node.card-green { background:#eef7ee; border-color:#d4e8d5; }
 .mindmap-node.card-orange { background:#fdf3e7; border-color:#f2e0cb; }
 .mindmap-node.card-red { background:#fdeeee; border-color:#f5d4d4; }

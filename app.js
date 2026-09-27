@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v56';
+const APP_VERSION = 'v57';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1372,7 +1372,7 @@ function showTagAutocomplete(input) {
 // ──────────────────────────────────────
 // 12b. Майндкарта
 // ──────────────────────────────────────
-var mm = { scale: 1, tx: 0, ty: 0, layout: null, drag: null, NODE_W: 150, RADIUS: 200 };
+var mm = { scale: 1, tx: 0, ty: 0, layout: null, drag: null, NODE_W: 190 };
 
 function openMindmap() {
   var ov = document.getElementById('mindmapOverlay');
@@ -1401,7 +1401,7 @@ function mindmapTree() {
 }
 
 function mindmapLayout(tree) {
-  var nodeW = 150, gap = 60;
+  var nodeW = 190, gap = 40;
   var unit = nodeW + gap;
 
   // Размер поддерева (число листьев) и глубина
@@ -1455,15 +1455,16 @@ function mindmapLayout(tree) {
     });
   });
 
-  return { nodes: nodes, links: links };
+  return { nodes: nodes, links: links, R: R };
 }
 
 function buildMindmap() {
   var tree = mindmapTree();
   var lay = mindmapLayout(tree);
   mm.layout = { nodes: lay.nodes, links: lay.links };
+  mm.R = lay.R;
   renderMindmapLayout();
-  fitMindmap();
+  initialMindmapView();
 }
 
 function renderMindmapLayout() {
@@ -1515,6 +1516,19 @@ function applyMindmapTransform() {
   layer.style.transform = t; layer.style.transformOrigin = '0 0';
 }
 
+function initialMindmapView() {
+  var canvas = document.getElementById('mindmapCanvas');
+  if (!canvas) return;
+  var R = mm.R || 600;
+  var span = 2 * (R + mm.NODE_W);
+  var scale = Math.min(canvas.clientWidth, canvas.clientHeight) / span;
+  scale = Math.max(0.15, Math.min(1.1, scale));
+  mm.scale = scale;
+  mm.tx = canvas.clientWidth / 2;
+  mm.ty = canvas.clientHeight / 2;
+  applyMindmapTransform();
+}
+
 function fitMindmap() {
   var canvas = document.getElementById('mindmapCanvas');
   if (!canvas || !mm.layout || !mm.layout.nodes.length) { mm.scale = 1; mm.tx = 0; mm.ty = 0; applyMindmapTransform(); return; }
@@ -1529,7 +1543,7 @@ function fitMindmap() {
   var pad = 70;
   var scale = Math.min((canvas.clientWidth - pad) / w, (canvas.clientHeight - pad) / h);
   if (!isFinite(scale) || scale <= 0) scale = 1;
-  scale = Math.min(scale, 1.5);
+  scale = Math.min(scale, 1.2);
   mm.scale = scale;
   mm.tx = canvas.clientWidth / 2 - ((minX + maxX) / 2) * scale;
   mm.ty = canvas.clientHeight / 2 - ((minY + maxY) / 2) * scale;
@@ -1540,7 +1554,7 @@ function mindmapZoom(factor, px, py) {
   var canvas = document.getElementById('mindmapCanvas');
   var cx = (px != null) ? px : canvas.clientWidth / 2;
   var cy = (py != null) ? py : canvas.clientHeight / 2;
-  var ns = Math.min(3, Math.max(0.12, mm.scale * factor));
+  var ns = Math.min(6, Math.max(0.06, mm.scale * factor));
   var k = ns / mm.scale;
   mm.tx = cx - (cx - mm.tx) * k;
   mm.ty = cy - (cy - mm.ty) * k;
