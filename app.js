@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v54';
+const APP_VERSION = 'v55';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -430,6 +430,11 @@ function openSelectMenu(anchor, options, onSelect) {
   menu.style.left = r.left + 'px';
   menu.style.top = (r.bottom + 4) + 'px';
   menu.style.minWidth = r.width + 'px';
+  // Не даём меню выйти за правый край экрана
+  var mw = menu.offsetWidth || 180;
+  if (r.left + mw > window.innerWidth - 8) {
+    menu.style.left = Math.max(8, window.innerWidth - mw - 8) + 'px';
+  }
 
   // Закрытие по клику вне меню
   setTimeout(function () {
@@ -767,6 +772,7 @@ async function copyShare() {
 function render() {
   var t = document.getElementById('boardTitle');
   if (t && t.textContent !== state.boardTitle) t.textContent = state.boardTitle;
+  computeColWidth();
   renderTagFilterBar();
   renderColumns();
   requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
@@ -1027,12 +1033,23 @@ function createCardElement(node) {
   if (!canEdit()) { card.classList.add('view-mode'); }
   if (node.color && CARD_COLORS[node.color] && CARD_COLORS[node.color].cls) { card.classList.add(CARD_COLORS[node.color].cls); }
 
-  // Кнопки действий — сверху справа (вариант Б), текст заголовка сдвинут
+  // Действия карточки — одна кнопка-меню «⋮» справа сверху
   if (canEdit()) {
     var ac = document.createElement('div'); ac.className = 'card-actions';
-    var ab = document.createElement('button'); ab.className = 'card-action-btn'; ab.textContent = '+'; ab.title = 'Добавить дочернюю карточку'; ab.addEventListener('click', function (e) { e.stopPropagation(); addChildNode(node); }); ac.appendChild(ab);
-    var eb = document.createElement('button'); eb.className = 'card-action-btn'; eb.textContent = '\u270e'; eb.title = 'Редактировать'; eb.addEventListener('click', function (e) { e.stopPropagation(); openModal(node.id); }); ac.appendChild(eb);
-    var db = document.createElement('button'); db.className = 'card-action-btn danger'; db.textContent = '\u2715'; db.title = 'Удалить'; db.addEventListener('click', function (e) { e.stopPropagation(); deleteNode(node.id); }); ac.appendChild(db);
+    var mb = document.createElement('button'); mb.className = 'card-action-btn card-menu-btn'; mb.textContent = '\u22ee'; mb.title = 'Действия';
+    mb.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openSelectMenu(mb, [
+        { value: 'child', label: 'Добавить дочернюю карточку' },
+        { value: 'edit', label: 'Редактировать' },
+        { value: 'delete', label: 'Удалить' }
+      ], function (val) {
+        if (val === 'child') addChildNode(node);
+        else if (val === 'edit') openModal(node.id);
+        else if (val === 'delete') deleteNode(node.id);
+      });
+    });
+    ac.appendChild(mb);
     card.appendChild(ac);
   }
 
@@ -1101,12 +1118,25 @@ function createCardElement(node) {
 // ──────────────────────────────────────
 // 10. Header alignment & height sync
 // ──────────────────────────────────────
+function computeColWidth() {
+  var canvas = document.getElementById('mainCanvas');
+  if (!canvas) return;
+  var N = state.columns.length;
+  if (N < 1) return;
+  var avail = canvas.clientWidth - 48 - 20; // паддинги: canvas 24×2 + контент 10×2
+  if (avail < 260) avail = 260;
+  var W = Math.max(260, Math.floor((avail - (N - 1) * 16) / N));
+  document.documentElement.style.setProperty('--col-w', W + 'px');
+  document.documentElement.style.setProperty('--col-step', (W + 16) + 'px');
+}
+
 function alignHeaders() {
   var headers = $$('.column-header'); if (!headers.length) return;
   var container = $('#columnsContainer'); if (!container) return;
   var cr = container.getBoundingClientRect();
-  var step = 276;   // карточка 260 + gap 8 + отступ sub-column 8
-  var headW = 260;
+  var rs = getComputedStyle(document.documentElement);
+  var step = parseFloat(rs.getPropertyValue('--col-step')) || 276;   // карточка + gap 8 + отступ sub-column 8
+  var headW = parseFloat(rs.getPropertyValue('--col-w')) || 260;
 
   for (var ci = 0; ci < headers.length; ci++) {
     var block = container.querySelector('.card-block[data-depth="' + ci + '"]');
@@ -1340,6 +1370,182 @@ function showTagAutocomplete(input) {
 }
 
 // ──────────────────────────────────────
+// 12b. Майндкарта
+// ──────────────────────────────────────
+var mm = { scale: 1, tx: 0, ty: 0, layout: null, drag: null, NODE_W: 150, RADIUS: 200 };
+
+function openMindmap() {
+  var ov = document.getElementById('mindmapOverlay');
+  if (!ov) return;
+  document.getElementById('mindmapTitle').textContent = state.boardTitle;
+  ov.style.display = 'flex';
+  buildMindmap();
+}
+
+function closeMindmap() {
+  var ov = document.getElementById('mindmapOverlay');
+  if (ov) ov.style.display = 'none';
+}
+
+function mindmapTree() {
+  var byId = {};
+  state.nodes.forEach(function (n) { if (n.type !== 'comment') byId[n.id] = n; });
+  var children = {};
+  var roots = [];
+  state.nodes.forEach(function (n) {
+    if (n.type === 'comment') return;
+    if (n.parentId && byId[n.parentId]) { (children[n.parentId] = children[n.parentId] || []).push(n); }
+    else roots.push(n);
+  });
+  return { byId: byId, children: children, roots: roots };
+}
+
+function mindmapWeight(id, children) {
+  var w = 1;
+  (children[id] || []).forEach(function (c) { w += mindmapWeight(c.id, children); });
+  return w;
+}
+
+function buildMindmap() {
+  var tree = mindmapTree();
+  var nodes = [];
+  var links = [];
+  var R = mm.RADIUS;
+
+  function place(node, level, a0, a1) {
+    var a = (a0 + a1) / 2;
+    var x = level * R * Math.cos(a);
+    var y = level * R * Math.sin(a);
+    nodes.push({ id: node.id, x: x, y: y, level: level, node: node });
+    var kids = tree.children[node.id] || [];
+    if (kids.length) {
+      var span = a1 - a0;
+      var kw = 0;
+      kids.forEach(function (k) { kw += mindmapWeight(k.id, tree.children); });
+      var acc = a0;
+      kids.forEach(function (k) {
+        var w = mindmapWeight(k.id, tree.children);
+        var next = acc + span * (w / kw);
+        place(k, level + 1, acc, next);
+        acc = next;
+      });
+    }
+  }
+
+  if (tree.roots.length) {
+    if (tree.roots.length === 1) {
+      place(tree.roots[0], 1, 0, Math.PI * 2);
+    } else {
+      var total = 0;
+      tree.roots.forEach(function (r) { total += mindmapWeight(r.id, tree.children); });
+      var acc = -Math.PI / 2;
+      tree.roots.forEach(function (r) {
+        var w = mindmapWeight(r.id, tree.children);
+        var span = Math.PI * 2 * (w / total);
+        place(r, 1, acc, acc + span);
+        acc += span;
+      });
+    }
+  }
+
+  var pos = {};
+  nodes.forEach(function (p) { pos[p.id] = p; });
+  nodes.forEach(function (p) {
+    if (p.level === 1) links.push({ x1: 0, y1: 0, x2: p.x, y2: p.y });
+    (tree.children[p.id] || []).forEach(function (c) {
+      var cn = pos[c.id];
+      if (cn) links.push({ x1: p.x, y1: p.y, x2: cn.x, y2: cn.y });
+    });
+  });
+
+  mm.layout = { nodes: nodes, links: links };
+  renderMindmapLayout();
+  fitMindmap();
+}
+
+function renderMindmapLayout() {
+  var svg = document.getElementById('mindmapSvg');
+  var layer = document.getElementById('mindmapNodes');
+  if (!mm.layout) return;
+  svg.innerHTML = '';
+  layer.innerHTML = '';
+
+  mm.layout.links.forEach(function (l) {
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    var mx = (l.x1 + l.x2) / 2;
+    var my = (l.y1 + l.y2) / 2;
+    path.setAttribute('d', 'M ' + l.x1 + ' ' + l.y1 + ' Q ' + mx + ' ' + my + ' ' + l.x2 + ' ' + l.y2);
+    path.setAttribute('class', 'mindmap-link');
+    svg.appendChild(path);
+  });
+
+  var center = document.createElement('div');
+  center.className = 'mindmap-node mindmap-node-center';
+  center.style.left = '0px'; center.style.top = '0px';
+  var ct = document.createElement('div'); ct.className = 'mindmap-node-title'; ct.textContent = state.boardTitle;
+  center.appendChild(ct);
+  layer.appendChild(center);
+
+  mm.layout.nodes.forEach(function (nd) {
+    var el = document.createElement('div');
+    el.className = 'mindmap-node' + (nd.level === 1 ? ' mindmap-node-root' : '');
+    var cls = CARD_COLORS[nd.node.color] ? CARD_COLORS[nd.node.color].cls : '';
+    if (cls) el.classList.add(cls);
+    el.style.left = nd.x + 'px';
+    el.style.top = nd.y + 'px';
+    var title = document.createElement('div'); title.className = 'mindmap-node-title';
+    title.textContent = nd.node.title || 'Без названия';
+    el.appendChild(title);
+    if (nd.node.note) { var nt = document.createElement('div'); nt.className = 'mindmap-node-note'; nt.textContent = nd.node.note; el.appendChild(nt); }
+    var meta = document.createElement('div'); meta.className = 'mindmap-node-meta';
+    meta.innerHTML = '<span class="status-dot ' + SD[nd.node.status] + '"></span>' + SL[nd.node.status];
+    el.appendChild(meta);
+    layer.appendChild(el);
+  });
+}
+
+function applyMindmapTransform() {
+  var svg = document.getElementById('mindmapSvg');
+  var layer = document.getElementById('mindmapNodes');
+  var t = 'translate(' + mm.tx + 'px,' + mm.ty + 'px) scale(' + mm.scale + ')';
+  svg.style.transform = t; svg.style.transformOrigin = '0 0';
+  layer.style.transform = t; layer.style.transformOrigin = '0 0';
+}
+
+function fitMindmap() {
+  var canvas = document.getElementById('mindmapCanvas');
+  if (!canvas || !mm.layout || !mm.layout.nodes.length) { mm.scale = 1; mm.tx = 0; mm.ty = 0; applyMindmapTransform(); return; }
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  mm.layout.nodes.forEach(function (nd) {
+    minX = Math.min(minX, nd.x - mm.NODE_W / 2); maxX = Math.max(maxX, nd.x + mm.NODE_W / 2);
+    minY = Math.min(minY, nd.y - 30); maxY = Math.max(maxY, nd.y + 30);
+  });
+  minX = Math.min(minX, -100); maxX = Math.max(maxX, 100);
+  minY = Math.min(minY, -24); maxY = Math.max(maxY, 24);
+  var w = maxX - minX, h = maxY - minY;
+  var pad = 70;
+  var scale = Math.min((canvas.clientWidth - pad) / w, (canvas.clientHeight - pad) / h);
+  if (!isFinite(scale) || scale <= 0) scale = 1;
+  scale = Math.min(scale, 1.5);
+  mm.scale = scale;
+  mm.tx = canvas.clientWidth / 2 - ((minX + maxX) / 2) * scale;
+  mm.ty = canvas.clientHeight / 2 - ((minY + maxY) / 2) * scale;
+  applyMindmapTransform();
+}
+
+function mindmapZoom(factor, px, py) {
+  var canvas = document.getElementById('mindmapCanvas');
+  var cx = (px != null) ? px : canvas.clientWidth / 2;
+  var cy = (py != null) ? py : canvas.clientHeight / 2;
+  var ns = Math.min(3, Math.max(0.12, mm.scale * factor));
+  var k = ns / mm.scale;
+  mm.tx = cx - (cx - mm.tx) * k;
+  mm.ty = cy - (cy - mm.ty) * k;
+  mm.scale = ns;
+  applyMindmapTransform();
+}
+
+// ──────────────────────────────────────
 // 13. Events
 // ──────────────────────────────────────
 function initEvents() {
@@ -1358,6 +1564,34 @@ function initEvents() {
   $('#shareDone').addEventListener('click', function () { $('#shareOverlay').style.display = 'none'; });
   $('#shareGenerateBtn').addEventListener('click', generateShare);
   $('#shareCopyBtn').addEventListener('click', copyShare);
+
+  // Майндкарта
+  var mmBtn = document.getElementById('mindmapBtn');
+  if (mmBtn) mmBtn.addEventListener('click', openMindmap);
+  var mmClose = document.getElementById('mindmapClose');
+  if (mmClose) mmClose.addEventListener('click', closeMindmap);
+  var mmIn = document.getElementById('mindmapZoomIn');
+  if (mmIn) mmIn.addEventListener('click', function () { mindmapZoom(1.2); });
+  var mmOut = document.getElementById('mindmapZoomOut');
+  if (mmOut) mmOut.addEventListener('click', function () { mindmapZoom(1 / 1.2); });
+  var mmFit = document.getElementById('mindmapFit');
+  if (mmFit) mmFit.addEventListener('click', fitMindmap);
+  var mmCanvas = document.getElementById('mindmapCanvas');
+  if (mmCanvas) {
+    mmCanvas.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var r = mmCanvas.getBoundingClientRect();
+      mindmapZoom(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - r.left, e.clientY - r.top);
+    }, { passive: false });
+    mmCanvas.addEventListener('mousedown', function (e) { mm.drag = { x: e.clientX, y: e.clientY, tx: mm.tx, ty: mm.ty }; });
+  }
+  window.addEventListener('mousemove', function (e) {
+    if (!mm.drag) return;
+    mm.tx = mm.drag.tx + (e.clientX - mm.drag.x);
+    mm.ty = mm.drag.ty + (e.clientY - mm.drag.y);
+    applyMindmapTransform();
+  });
+  window.addEventListener('mouseup', function () { mm.drag = null; });
 
   // Map selector
   var addColBtn = document.getElementById('addColumnBtn');
@@ -1407,7 +1641,7 @@ function initEvents() {
   });
 
   // Search
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modalOverlay').style.display === 'flex') closeModal(); else if ($('#shareOverlay').style.display === 'flex') $('#shareOverlay').style.display = 'none'; else if (state.searchQuery) { $('#searchInput').value = ''; state.searchQuery = ''; $('#clearSearch').style.display = 'none'; updateCards(); syncHeights(); alignHeaders(); } } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { var mmOv = document.getElementById('mindmapOverlay'); if (mmOv && mmOv.style.display === 'flex') { closeMindmap(); } else if ($('#modalOverlay').style.display === 'flex') closeModal(); else if ($('#shareOverlay').style.display === 'flex') $('#shareOverlay').style.display = 'none'; else if (state.searchQuery) { $('#searchInput').value = ''; state.searchQuery = ''; $('#clearSearch').style.display = 'none'; updateCards(); syncHeights(); alignHeaders(); } } });
   $('#searchInput').addEventListener('input', function () {
     var v = $('#searchInput').value.trim();
     $('#clearSearch').style.display = v ? 'block' : 'none';
@@ -1434,7 +1668,7 @@ function initEvents() {
     r.readAsText(f); e.target.value = '';
   });
 
-  window.addEventListener('resize', function () { syncHeights(); alignHeaders(); });
+  window.addEventListener('resize', function () { computeColWidth(); syncHeights(); alignHeaders(); var mo = document.getElementById('mindmapOverlay'); if (mo && mo.style.display === 'flex') fitMindmap(); });
 }
 
 // ──────────────────────────────────────
