@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v59';
+const APP_VERSION = 'v60';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1372,7 +1372,7 @@ function showTagAutocomplete(input) {
 // ──────────────────────────────────────
 // 12b. Майндкарта
 // ──────────────────────────────────────
-var mm = { scale: 1, tx: 0, ty: 0, layout: null, drag: null, NODE_W: 190 };
+var mm = { scale: 1, tx: 0, ty: 0, layout: null, tree: null, colorOf: {}, style: 'B', drag: null, NODE_W: 190, R: 600 };
 
 function openMindmap() {
   var ov = document.getElementById('mindmapOverlay');
@@ -1504,41 +1504,49 @@ function assignMindmapColors(tree) {
   return colorOf;
 }
 
-function drawMindmapBranch(svg, from, to, width, color, opacity) {
-  var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+function branchPath(from, to) {
   var mx = (from.x + to.x) / 2;
   var my = (from.y + to.y) / 2;
-  var dir = Math.atan2(to.y, to.x);
-  var tx = -Math.sin(dir), ty = Math.cos(dir);
+  var dir = Math.atan2(to.y - from.y, to.x - from.x);
+  var px = -Math.sin(dir), py = Math.cos(dir);
   var dist = Math.sqrt((to.x - from.x) * (to.x - from.x) + (to.y - from.y) * (to.y - from.y));
-  var curl = dist * 0.18;
-  var cx = mx + tx * curl, cy = my + ty * curl;
-  path.setAttribute('d', 'M ' + from.x + ' ' + from.y + ' Q ' + cx + ' ' + cy + ' ' + to.x + ' ' + to.y);
-  path.setAttribute('stroke', color);
-  path.setAttribute('stroke-width', width);
-  path.setAttribute('fill', 'none');
-  path.setAttribute('stroke-linecap', 'round');
-  path.setAttribute('stroke-opacity', opacity);
-  svg.appendChild(path);
+  var curl = dist * 0.2;
+  var cx = mx + px * curl, cy = my + py * curl;
+  return 'M ' + from.x + ' ' + from.y + ' Q ' + cx + ' ' + cy + ' ' + to.x + ' ' + to.y;
+}
+
+function wrapMindmapText(text, maxLen) {
+  var words = String(text || 'Без названия').split(/\s+/);
+  var lines = [];
+  var cur = '';
+  words.forEach(function (w) {
+    if (cur && (cur + ' ' + w).length > maxLen) { lines.push(cur); cur = w; }
+    else cur = cur ? cur + ' ' + w : w;
+  });
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [String(text || 'Без названия')];
 }
 
 function buildMindmap() {
   var tree = mindmapTree();
   var lay = mindmapLayout(tree);
-  mm.layout = { nodes: lay.nodes, links: lay.links };
   mm.tree = tree;
+  mm.layout = lay;
   mm.colorOf = assignMindmapColors(tree);
   mm.R = lay.R;
-  renderMindmapLayout();
+  renderMindmap();
   initialMindmapView();
 }
 
-function renderMindmapLayout() {
+function renderMindmap() {
   var svg = document.getElementById('mindmapSvg');
-  var layer = document.getElementById('mindmapNodes');
-  if (!mm.layout) return;
+  if (!svg || !mm.layout) return;
   svg.innerHTML = '';
-  layer.innerHTML = '';
+  var NS = 'http://www.w3.org/2000/svg';
+
+  var root = document.createElementNS(NS, 'g');
+  root.setAttribute('id', 'mmRoot');
+  svg.appendChild(root);
 
   var posById = {};
   mm.layout.nodes.forEach(function (n) { posById[n.id] = n; });
@@ -1546,49 +1554,108 @@ function renderMindmapLayout() {
   // Изогнутые цветные ветки
   mm.layout.nodes.forEach(function (nd) {
     var color = mm.colorOf[nd.id] || '#0071e3';
-    if (nd.level === 1) {
-      drawMindmapBranch(svg, { x: 0, y: 0 }, nd, 7, color, 1);
-    } else {
-      var parent = posById[nd.node.parentId];
-      if (parent) {
-        var w = nd.level === 2 ? 5 : (nd.level === 3 ? 3.5 : 2.5);
-        var op = nd.level === 2 ? 0.85 : (nd.level === 3 ? 0.7 : 0.6);
-        drawMindmapBranch(svg, parent, nd, w, color, op);
-      }
-    }
+    var from = nd.level === 1 ? { x: 0, y: 0 } : posById[nd.node.parentId];
+    if (!from) return;
+    var p = document.createElementNS(NS, 'path');
+    p.setAttribute('id', 'mmb-' + nd.id);
+    p.setAttribute('d', branchPath(from, nd));
+    p.setAttribute('stroke', color);
+    p.setAttribute('stroke-width', nd.level === 1 ? 8 : (nd.level === 2 ? 5 : (nd.level === 3 ? 3 : 2)));
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke-linecap', 'round');
+    p.setAttribute('stroke-opacity', nd.level === 1 ? 1 : (nd.level === 2 ? 0.85 : (nd.level === 3 ? 0.7 : 0.6)));
+    root.appendChild(p);
   });
 
   // Центральная тема
-  var center = document.createElement('div');
-  center.className = 'mindmap-center';
-  center.textContent = state.boardTitle;
-  layer.appendChild(center);
+  var cw = Math.min(300, Math.max(140, state.boardTitle.length * 9 + 48));
+  var centerG = document.createElementNS(NS, 'g');
+  var rect = document.createElementNS(NS, 'rect');
+  rect.setAttribute('class', 'mm-center-rect');
+  rect.setAttribute('x', -cw / 2); rect.setAttribute('y', -26);
+  rect.setAttribute('width', cw); rect.setAttribute('height', 52);
+  rect.setAttribute('rx', 26);
+  var ctext = document.createElementNS(NS, 'text');
+  ctext.setAttribute('class', 'mm-center-text');
+  ctext.setAttribute('text-anchor', 'middle');
+  ctext.setAttribute('dominant-baseline', 'central');
+  ctext.setAttribute('font-size', '15');
+  ctext.setAttribute('font-weight', '700');
+  ctext.textContent = state.boardTitle;
+  centerG.appendChild(rect);
+  centerG.appendChild(ctext);
+  root.appendChild(centerG);
 
-  // Подписи на ветках
+  // Точка на конце ветки + подпись
   mm.layout.nodes.forEach(function (nd) {
     var color = mm.colorOf[nd.id] || '#0071e3';
-    var label = document.createElement('div');
-    label.className = 'mindmap-label' + (nd.level === 1 ? ' mindmap-label-root' : '');
-    label.style.left = nd.x + 'px';
-    label.style.top = nd.y + 'px';
-    var dot = document.createElement('span');
-    dot.className = 'mindmap-dot';
-    dot.style.background = color;
-    var txt = document.createElement('span');
-    txt.className = 'mindmap-txt';
-    txt.textContent = nd.node.title || 'Без названия';
-    label.appendChild(dot);
-    label.appendChild(txt);
-    layer.appendChild(label);
+    var dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', nd.x); dot.setAttribute('cy', nd.y);
+    dot.setAttribute('r', nd.level === 1 ? 6 : 4);
+    dot.setAttribute('fill', color);
+    root.appendChild(dot);
+
+    if (mm.style === 'A') {
+      var textPathId = 'mmb-' + nd.id;
+      if (nd.x < 0) {
+        var from = nd.level === 1 ? { x: 0, y: 0 } : posById[nd.node.parentId];
+        var rp = document.createElementNS(NS, 'path');
+        rp.setAttribute('id', 'mmbr-' + nd.id);
+        rp.setAttribute('d', branchPath(nd, from));
+        rp.setAttribute('fill', 'none');
+        rp.setAttribute('stroke', 'none');
+        root.appendChild(rp);
+        textPathId = 'mmbr-' + nd.id;
+      }
+      var tA = document.createElementNS(NS, 'text');
+      tA.setAttribute('class', 'mm-label-text');
+      tA.setAttribute('font-size', nd.level === 1 ? '14' : '11');
+      tA.setAttribute('font-weight', nd.level === 1 ? '700' : '600');
+      var tp = document.createElementNS(NS, 'textPath');
+      tp.setAttribute('href', '#' + textPathId);
+      tp.setAttribute('startOffset', '50%');
+      tp.setAttribute('text-anchor', 'middle');
+      tp.textContent = nd.node.title || 'Без названия';
+      tA.appendChild(tp);
+      root.appendChild(tA);
+    } else {
+      var lines = wrapMindmapText(nd.node.title, nd.level === 1 ? 22 : 18);
+      var leftSide = nd.x < 0;
+      var ox = leftSide ? nd.x - 12 : nd.x + 12;
+      var fontSize = nd.level === 1 ? 14 : 12;
+      var lineH = fontSize + 3;
+      var startY = nd.y - ((lines.length - 1) * lineH) / 2;
+      var tB = document.createElementNS(NS, 'text');
+      tB.setAttribute('class', 'mm-label-text');
+      tB.setAttribute('text-anchor', leftSide ? 'end' : 'start');
+      tB.setAttribute('font-weight', nd.level === 1 ? '700' : '600');
+      lines.forEach(function (line, li) {
+        var tspan = document.createElementNS(NS, 'tspan');
+        tspan.setAttribute('x', ox);
+        if (li === 0) tspan.setAttribute('y', startY);
+        else tspan.setAttribute('dy', lineH);
+        tspan.setAttribute('font-size', fontSize);
+        tspan.textContent = line;
+        tB.appendChild(tspan);
+      });
+      root.appendChild(tB);
+    }
   });
 }
 
+function setMindmapStyle(style) {
+  mm.style = style;
+  var btns = document.querySelectorAll('#mindmapStyleToggle .mindmap-style-btn');
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.toggle('active', btns[i].getAttribute('data-style') === style);
+  }
+  renderMindmap();
+  applyMindmapTransform();
+}
+
 function applyMindmapTransform() {
-  var svg = document.getElementById('mindmapSvg');
-  var layer = document.getElementById('mindmapNodes');
-  var t = 'translate(' + mm.tx + 'px,' + mm.ty + 'px) scale(' + mm.scale + ')';
-  svg.style.transform = t; svg.style.transformOrigin = '0 0';
-  layer.style.transform = t; layer.style.transformOrigin = '0 0';
+  var root = document.getElementById('mmRoot');
+  if (root) root.setAttribute('transform', 'translate(' + mm.tx + ',' + mm.ty + ') scale(' + mm.scale + ')');
 }
 
 function initialMindmapView() {
@@ -1684,6 +1751,10 @@ function initEvents() {
     applyMindmapTransform();
   });
   window.addEventListener('mouseup', function () { mm.drag = null; });
+  var mmStyleBtns = document.querySelectorAll('#mindmapStyleToggle .mindmap-style-btn');
+  for (var si = 0; si < mmStyleBtns.length; si++) {
+    mmStyleBtns[si].addEventListener('click', function () { setMindmapStyle(this.getAttribute('data-style')); });
+  }
 
   // Map selector
   var addColBtn = document.getElementById('addColumnBtn');
