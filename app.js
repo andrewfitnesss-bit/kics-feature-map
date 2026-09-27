@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v61';
+const APP_VERSION = 'v62';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1236,6 +1236,7 @@ function deleteNode(id) {
   pruneUnusedTags();
   renderTagFilterBar();
   scheduleSave(); updateCards(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
+  if (isMindmapOpen()) renderMindmap(true);
 }
 function saveModal() {
   var n = getNodeById(state.editingNodeId); if (!n) return;
@@ -1250,6 +1251,7 @@ function saveModal() {
   var y = $('#modalYear').value, q = $('#modalQuarter').value;
   n.dueDate = (q === 'Now' || q === 'Next' || q === 'Later') ? q : ((y && q) ? (y + ' ' + q) : '');
   closeModal(); scheduleSave(); updateCards(); renderTagFilterBar(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
+  if (isMindmapOpen()) renderMindmap(true);
 }
 
 // ──────────────────────────────────────
@@ -1370,6 +1372,417 @@ function showTagAutocomplete(input) {
 }
 
 // ──────────────────────────────────────
+// 12b. Mind map (Miro-style viewer)
+// ──────────────────────────────────────
+var MINDMAP_COLORS = ['#4262ff', '#8a5cff', '#00a884', '#f59e0b', '#e85d75', '#168aad', '#7b61ff', '#e76f51'];
+var mindmap = {
+  scale: 1,
+  tx: 0,
+  ty: 0,
+  dragging: null,
+  collapsed: new Set(),
+  tree: null,
+  positions: {},
+  nodeEls: {},
+  bounds: null,
+  renderToken: 0
+};
+
+function isMindmapOpen() {
+  var ov = document.getElementById('mindmapOverlay');
+  return !!ov && ov.style.display === 'flex';
+}
+
+function buildMindmapTree() {
+  var byId = {};
+  var children = {};
+  var roots = [];
+  state.nodes.forEach(function (node) {
+    if (node.type !== 'comment') byId[node.id] = node;
+  });
+  state.nodes.forEach(function (node) {
+    if (node.type === 'comment') return;
+    if (node.parentId && byId[node.parentId]) {
+      if (!children[node.parentId]) children[node.parentId] = [];
+      children[node.parentId].push(node.id);
+    } else {
+      roots.push(node.id);
+    }
+  });
+  return { byId: byId, children: children, roots: roots };
+}
+
+function mindmapVisibleChildren(id) {
+  if (mindmap.collapsed.has(id)) return [];
+  return (mindmap.tree.children[id] || []).filter(function (cid) { return !!mindmap.tree.byId[cid]; });
+}
+
+function mindmapSubtreeWeight(id) {
+  var kids = mindmapVisibleChildren(id);
+  if (!kids.length) return 1;
+  return kids.reduce(function (sum, cid) { return sum + mindmapSubtreeWeight(cid); }, 0);
+}
+
+function splitMindmapRoots() {
+  var weighted = mindmap.tree.roots.map(function (id, index) {
+    return { id: id, weight: mindmapSubtreeWeight(id), index: index };
+  }).sort(function (a, b) { return b.weight - a.weight || a.index - b.index; });
+  var sides = { left: [], right: [] };
+  var totals = { left: 0, right: 0 };
+  weighted.forEach(function (item) {
+    var side = totals.left < totals.right ? 'left' : 'right';
+    sides[side].push(item);
+    totals[side] += item.weight;
+  });
+  sides.left.sort(function (a, b) { return a.index - b.index; });
+  sides.right.sort(function (a, b) { return a.index - b.index; });
+  return sides;
+}
+
+function collectVisibleMindmapNodes() {
+  var result = [];
+  function walk(id, depth, side, branchIndex) {
+    var node = mindmap.tree.byId[id];
+    if (!node) return;
+    result.push({ id: id, node: node, depth: depth, side: side, branchIndex: branchIndex });
+    mindmapVisibleChildren(id).forEach(function (cid) { walk(cid, depth + 1, side, branchIndex); });
+  }
+  var sides = splitMindmapRoots();
+  sides.left.forEach(function (item, i) { walk(item.id, 1, 'left', i); });
+  sides.right.forEach(function (item, i) { walk(item.id, 1, 'right', i); });
+  return { items: result, sides: sides };
+}
+
+function mindmapBranchColor(item) {
+  var sideOffset = item.side === 'left' ? 0 : 4;
+  return MINDMAP_COLORS[(item.branchIndex + sideOffset) % MINDMAP_COLORS.length];
+}
+
+function mindmapDescendantCount(id) {
+  var count = 0;
+  (mindmap.tree.children[id] || []).forEach(function countBranch(cid) {
+    count++;
+    (mindmap.tree.children[cid] || []).forEach(countBranch);
+  });
+  return count;
+}
+
+function createMindmapNodeElement(item) {
+  var node = item.node;
+  var el = document.createElement('div');
+  el.className = 'mindmap-node side-' + item.side;
+  el.dataset.nodeId = node.id;
+  el.style.setProperty('--mm-branch', mindmapBranchColor(item));
+
+  var title = document.createElement('div');
+  title.className = 'mindmap-node-title';
+  title.textContent = node.title || 'Без названия';
+  title.title = node.title || 'Без названия';
+  el.appendChild(title);
+
+  var meta = document.createElement('div');
+  meta.className = 'mindmap-node-meta';
+  var color = document.createElement('span');
+  color.className = 'mindmap-card-color ' + (node.color || 'none');
+  color.title = 'Цвет исходной карточки';
+  meta.appendChild(color);
+  var status = document.createElement('span');
+  status.textContent = SL[node.status] || SL.none;
+  meta.appendChild(status);
+  if (node.dueDate) {
+    var due = document.createElement('span');
+    due.textContent = '· ' + node.dueDate;
+    meta.appendChild(due);
+  }
+  var comment = getCommentFor(node.id);
+  if (comment || node.note) {
+    var note = document.createElement('span');
+    note.className = 'mindmap-note-icon';
+    note.textContent = '📝';
+    note.title = comment ? (comment.note || comment.title || 'Заметка') : node.note;
+    meta.appendChild(note);
+  }
+  el.appendChild(meta);
+
+  var allChildren = mindmap.tree.children[node.id] || [];
+  if (allChildren.length) {
+    var collapse = document.createElement('button');
+    collapse.className = 'mindmap-collapse';
+    var hidden = mindmap.collapsed.has(node.id);
+    collapse.textContent = hidden ? '+' + allChildren.length : '−';
+    collapse.title = hidden ? 'Развернуть ветку' : 'Свернуть ветку';
+    collapse.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (mindmap.collapsed.has(node.id)) mindmap.collapsed.delete(node.id);
+      else mindmap.collapsed.add(node.id);
+      renderMindmap(true);
+    });
+    el.appendChild(collapse);
+  }
+
+  var clickTimer = null;
+  el.addEventListener('click', function () {
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(function () { openCardView(node.id); }, 220);
+  });
+  el.addEventListener('dblclick', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    clearTimeout(clickTimer);
+    if (canEdit()) openModal(node.id);
+    else openCardView(node.id);
+  });
+  return el;
+}
+
+function renderMindmapNodes(items) {
+  var layer = document.getElementById('mindmapNodes');
+  layer.innerHTML = '';
+  mindmap.nodeEls = {};
+
+  var center = document.createElement('div');
+  center.className = 'mindmap-node is-center';
+  center.dataset.nodeId = '__center__';
+  var centerTitle = document.createElement('div');
+  centerTitle.className = 'mindmap-node-title';
+  centerTitle.textContent = state.boardTitle;
+  center.appendChild(centerTitle);
+  layer.appendChild(center);
+  mindmap.nodeEls.__center__ = center;
+
+  items.forEach(function (item) {
+    var el = createMindmapNodeElement(item);
+    layer.appendChild(el);
+    mindmap.nodeEls[item.id] = el;
+  });
+}
+
+function mindmapNodeHeight(id) {
+  var el = mindmap.nodeEls[id];
+  return el ? Math.max(62, el.offsetHeight) : 62;
+}
+
+function layoutMindmapSide(rootItems, side, yGap) {
+  var positions = {};
+  var cursor = 0;
+  var X_STEP = 300;
+
+  function place(id, depth, branchIndex) {
+    var kids = mindmapVisibleChildren(id);
+    var h = mindmapNodeHeight(id);
+    var y;
+    if (!kids.length) {
+      y = cursor + h / 2;
+      cursor += h + yGap;
+    } else {
+      var childYs = [];
+      kids.forEach(function (cid) { childYs.push(place(cid, depth + 1, branchIndex)); });
+      y = (childYs[0] + childYs[childYs.length - 1]) / 2;
+    }
+    positions[id] = {
+      id: id,
+      x: (side === 'right' ? 1 : -1) * depth * X_STEP,
+      y: y,
+      side: side,
+      depth: depth,
+      branchIndex: branchIndex,
+      width: mindmap.nodeEls[id] ? mindmap.nodeEls[id].offsetWidth : 220,
+      height: h
+    };
+    return y;
+  }
+
+  rootItems.forEach(function (item, index) {
+    place(item.id, 1, index);
+    cursor += yGap * 1.5;
+  });
+  return { positions: positions, height: Math.max(0, cursor - yGap) };
+}
+
+function centerMindmapSide(layout) {
+  var offset = -layout.height / 2;
+  Object.keys(layout.positions).forEach(function (id) { layout.positions[id].y += offset; });
+}
+
+function mergeMindmapPositions(left, right) {
+  var merged = { __center__: { id: '__center__', x: 0, y: 0, width: 250, height: 76, depth: 0, side: 'center' } };
+  [left.positions, right.positions].forEach(function (map) {
+    Object.keys(map).forEach(function (id) { merged[id] = map[id]; });
+  });
+  return merged;
+}
+
+function resolveMindmapCollisions() {
+  ['left', 'right'].forEach(function (side) {
+    var levels = {};
+    Object.keys(mindmap.positions).forEach(function (id) {
+      var p = mindmap.positions[id];
+      if (p.side !== side) return;
+      if (!levels[p.depth]) levels[p.depth] = [];
+      levels[p.depth].push(p);
+    });
+    Object.keys(levels).forEach(function (depth) {
+      var nodes = levels[depth].sort(function (a, b) { return a.y - b.y; });
+      for (var i = 1; i < nodes.length; i++) {
+        var prev = nodes[i - 1];
+        var current = nodes[i];
+        var minimumY = prev.y + prev.height / 2 + current.height / 2 + 24;
+        if (current.y < minimumY) current.y = minimumY;
+      }
+      if (!nodes.length) return;
+      var center = (nodes[0].y + nodes[nodes.length - 1].y) / 2;
+      nodes.forEach(function (p) { p.y -= center; });
+    });
+  });
+}
+
+function applyMindmapNodePositions() {
+  Object.keys(mindmap.positions).forEach(function (id) {
+    var el = mindmap.nodeEls[id];
+    var p = mindmap.positions[id];
+    if (!el || !p) return;
+    el.style.left = p.x + 'px';
+    el.style.top = p.y + 'px';
+  });
+}
+
+function mindmapEdgePath(parent, child) {
+  var direction = child.side === 'left' ? -1 : 1;
+  var sx = parent.x + direction * parent.width / 2;
+  var sy = parent.y;
+  var ex = child.x - direction * child.width / 2;
+  var ey = child.y;
+  var bend = Math.max(42, Math.abs(ex - sx) * 0.52);
+  var c1x = sx + direction * bend;
+  var c2x = ex - direction * bend;
+  return 'M ' + sx + ' ' + sy + ' C ' + c1x + ' ' + sy + ', ' + c2x + ' ' + ey + ', ' + ex + ' ' + ey;
+}
+
+function renderMindmapEdges(items) {
+  var svg = document.getElementById('mindmapEdges');
+  svg.innerHTML = '';
+  var NS = 'http://www.w3.org/2000/svg';
+  var itemById = {};
+  items.forEach(function (item) { itemById[item.id] = item; });
+  items.forEach(function (item) {
+    var child = mindmap.positions[item.id];
+    if (!child) return;
+    var parentId = item.node.parentId && mindmap.positions[item.node.parentId] ? item.node.parentId : '__center__';
+    var parent = mindmap.positions[parentId];
+    if (!parent) return;
+    var path = document.createElementNS(NS, 'path');
+    path.setAttribute('class', 'mindmap-edge');
+    path.setAttribute('d', mindmapEdgePath(parent, child));
+    path.setAttribute('stroke', mindmapBranchColor(item));
+    path.setAttribute('stroke-width', item.depth === 1 ? '5' : (item.depth === 2 ? '3.5' : '2.5'));
+    path.setAttribute('stroke-opacity', item.depth === 1 ? '0.95' : '0.72');
+    svg.appendChild(path);
+  });
+}
+
+function calculateMindmapBounds() {
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  Object.keys(mindmap.positions).forEach(function (id) {
+    var p = mindmap.positions[id];
+    minX = Math.min(minX, p.x - p.width / 2 - 30);
+    maxX = Math.max(maxX, p.x + p.width / 2 + 30);
+    minY = Math.min(minY, p.y - p.height / 2 - 30);
+    maxY = Math.max(maxY, p.y + p.height / 2 + 30);
+  });
+  if (!isFinite(minX)) return { minX: -125, minY: -40, maxX: 125, maxY: 40 };
+  return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
+}
+
+function updateMindmapZoomLabel() {
+  var label = document.getElementById('mindmapZoomLabel');
+  if (label) label.textContent = Math.round(mindmap.scale * 100) + '%';
+}
+
+function applyMindmapTransform() {
+  var world = document.getElementById('mindmapWorld');
+  if (!world) return;
+  world.style.transform = 'translate(' + mindmap.tx + 'px,' + mindmap.ty + 'px) scale(' + mindmap.scale + ')';
+  updateMindmapZoomLabel();
+}
+
+function centerMindmap() {
+  var canvas = document.getElementById('mindmapCanvas');
+  if (!canvas) return;
+  mindmap.scale = 1;
+  mindmap.tx = canvas.clientWidth / 2;
+  mindmap.ty = canvas.clientHeight / 2;
+  applyMindmapTransform();
+}
+
+function fitMindmap() {
+  var canvas = document.getElementById('mindmapCanvas');
+  var b = mindmap.bounds;
+  if (!canvas || !b) return;
+  var width = Math.max(1, b.maxX - b.minX);
+  var height = Math.max(1, b.maxY - b.minY);
+  var padding = 90;
+  var sx = (canvas.clientWidth - padding) / width;
+  var sy = (canvas.clientHeight - padding) / height;
+  mindmap.scale = Math.max(0.12, Math.min(1, Math.min(sx, sy)));
+  var cx = (b.minX + b.maxX) / 2;
+  var cy = (b.minY + b.maxY) / 2;
+  mindmap.tx = canvas.clientWidth / 2 - cx * mindmap.scale;
+  mindmap.ty = canvas.clientHeight / 2 - cy * mindmap.scale;
+  applyMindmapTransform();
+}
+
+function zoomMindmap(factor, viewportX, viewportY) {
+  var canvas = document.getElementById('mindmapCanvas');
+  if (!canvas) return;
+  var cx = viewportX == null ? canvas.clientWidth / 2 : viewportX;
+  var cy = viewportY == null ? canvas.clientHeight / 2 : viewportY;
+  var next = Math.max(0.1, Math.min(2.5, mindmap.scale * factor));
+  var ratio = next / mindmap.scale;
+  mindmap.tx = cx - (cx - mindmap.tx) * ratio;
+  mindmap.ty = cy - (cy - mindmap.ty) * ratio;
+  mindmap.scale = next;
+  applyMindmapTransform();
+}
+
+function renderMindmap(keepView) {
+  if (!isMindmapOpen()) return;
+  var token = ++mindmap.renderToken;
+  mindmap.tree = buildMindmapTree();
+  var visible = collectVisibleMindmapNodes();
+  renderMindmapNodes(visible.items);
+
+  requestAnimationFrame(function () {
+    if (token !== mindmap.renderToken || !isMindmapOpen()) return;
+    var left = layoutMindmapSide(visible.sides.left, 'left', 28);
+    var right = layoutMindmapSide(visible.sides.right, 'right', 28);
+    centerMindmapSide(left);
+    centerMindmapSide(right);
+    mindmap.positions = mergeMindmapPositions(left, right);
+    resolveMindmapCollisions();
+    applyMindmapNodePositions();
+    renderMindmapEdges(visible.items);
+    mindmap.bounds = calculateMindmapBounds();
+    if (keepView) applyMindmapTransform();
+    else centerMindmap();
+  });
+}
+
+function openMindmap() {
+  var overlay = document.getElementById('mindmapOverlay');
+  if (!overlay) return;
+  document.getElementById('mindmapTitle').textContent = state.boardTitle;
+  overlay.style.display = 'flex';
+  mindmap.collapsed.clear();
+  renderMindmap(false);
+}
+
+function closeMindmap() {
+  var overlay = document.getElementById('mindmapOverlay');
+  if (overlay) overlay.style.display = 'none';
+  mindmap.dragging = null;
+}
+
+// ──────────────────────────────────────
 // 13. Events
 // ──────────────────────────────────────
 function initEvents() {
@@ -1381,6 +1794,44 @@ function initEvents() {
   // Просмотр карточки (read-only модалка)
   $('#cardViewClose').addEventListener('click', closeCardView);
   $('#cardViewOverlay').addEventListener('click', function (e) { if (e.target === $('#cardViewOverlay')) closeCardView(); });
+
+  // Mind map
+  var mmBtn = document.getElementById('mindmapBtn');
+  if (mmBtn) mmBtn.addEventListener('click', openMindmap);
+  var mmClose = document.getElementById('mindmapClose');
+  if (mmClose) mmClose.addEventListener('click', closeMindmap);
+  var mmZoomIn = document.getElementById('mindmapZoomIn');
+  if (mmZoomIn) mmZoomIn.addEventListener('click', function () { zoomMindmap(1.2); });
+  var mmZoomOut = document.getElementById('mindmapZoomOut');
+  if (mmZoomOut) mmZoomOut.addEventListener('click', function () { zoomMindmap(1 / 1.2); });
+  var mmFit = document.getElementById('mindmapFit');
+  if (mmFit) mmFit.addEventListener('click', fitMindmap);
+  var mmCenter = document.getElementById('mindmapCenter');
+  if (mmCenter) mmCenter.addEventListener('click', centerMindmap);
+  var mmCanvas = document.getElementById('mindmapCanvas');
+  if (mmCanvas) {
+    mmCanvas.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var rect = mmCanvas.getBoundingClientRect();
+      zoomMindmap(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - rect.left, e.clientY - rect.top);
+    }, { passive: false });
+    mmCanvas.addEventListener('mousedown', function (e) {
+      if (e.button !== 0 || e.target.closest('.mindmap-node')) return;
+      mindmap.dragging = { x: e.clientX, y: e.clientY, tx: mindmap.tx, ty: mindmap.ty };
+      mmCanvas.classList.add('is-panning');
+    });
+  }
+  window.addEventListener('mousemove', function (e) {
+    if (!mindmap.dragging) return;
+    mindmap.tx = mindmap.dragging.tx + (e.clientX - mindmap.dragging.x);
+    mindmap.ty = mindmap.dragging.ty + (e.clientY - mindmap.dragging.y);
+    applyMindmapTransform();
+  });
+  window.addEventListener('mouseup', function () {
+    if (!mindmap.dragging) return;
+    mindmap.dragging = null;
+    if (mmCanvas) mmCanvas.classList.remove('is-panning');
+  });
 
   // Share
   $('#shareBtn').addEventListener('click', function () { $('#shareOverlay').style.display = 'flex'; loadShareList(); });
@@ -1437,7 +1888,7 @@ function initEvents() {
   });
 
   // Search
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modalOverlay').style.display === 'flex') closeModal(); else if ($('#shareOverlay').style.display === 'flex') $('#shareOverlay').style.display = 'none'; else if (state.searchQuery) { $('#searchInput').value = ''; state.searchQuery = ''; $('#clearSearch').style.display = 'none'; updateCards(); syncHeights(); alignHeaders(); } } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modalOverlay').style.display === 'flex') closeModal(); else if ($('#cardViewOverlay').style.display === 'flex') closeCardView(); else if ($('#shareOverlay').style.display === 'flex') $('#shareOverlay').style.display = 'none'; else if (isMindmapOpen()) closeMindmap(); else if (state.searchQuery) { $('#searchInput').value = ''; state.searchQuery = ''; $('#clearSearch').style.display = 'none'; updateCards(); syncHeights(); alignHeaders(); } } });
   $('#searchInput').addEventListener('input', function () {
     var v = $('#searchInput').value.trim();
     $('#clearSearch').style.display = v ? 'block' : 'none';
@@ -1464,7 +1915,7 @@ function initEvents() {
     r.readAsText(f); e.target.value = '';
   });
 
-  window.addEventListener('resize', function () { computeColWidth(); syncHeights(); alignHeaders(); });
+  window.addEventListener('resize', function () { computeColWidth(); syncHeights(); alignHeaders(); if (isMindmapOpen()) fitMindmap(); });
 }
 
 // ──────────────────────────────────────
