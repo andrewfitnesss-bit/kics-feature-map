@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v55';
+const APP_VERSION = 'v56';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1394,71 +1394,74 @@ function mindmapTree() {
   var roots = [];
   state.nodes.forEach(function (n) {
     if (n.type === 'comment') return;
-    if (n.parentId && byId[n.parentId]) { (children[n.parentId] = children[n.parentId] || []).push(n); }
-    else roots.push(n);
+    if (n.parentId && byId[n.parentId]) { (children[n.parentId] = children[n.parentId] || []).push(n.id); }
+    else roots.push(n.id);
   });
   return { byId: byId, children: children, roots: roots };
 }
 
-function mindmapWeight(id, children) {
-  var w = 1;
-  (children[id] || []).forEach(function (c) { w += mindmapWeight(c.id, children); });
-  return w;
+function mindmapLayout(tree) {
+  var nodeW = 150, gap = 60;
+  var unit = nodeW + gap;
+
+  // Размер поддерева (число листьев) и глубина
+  var lf = {}, depth = {}, maxDepth = 0;
+  function countLeaves(id) {
+    var kids = tree.children[id] || [];
+    if (!kids.length) { lf[id] = 1; return 1; }
+    var s = 0; kids.forEach(function (k) { s += countLeaves(k); });
+    lf[id] = s; return s;
+  }
+  tree.roots.forEach(function (r) { countLeaves(r); });
+  var L = tree.roots.reduce(function (a, r) { return a + (lf[r] || 0); }, 0) || 1;
+
+  function calcDepth(id, d) {
+    depth[id] = d; if (d > maxDepth) maxDepth = d;
+    (tree.children[id] || []).forEach(function (k) { calcDepth(k, d + 1); });
+  }
+  tree.roots.forEach(function (r) { calcDepth(r, 1); });
+  if (maxDepth < 1) maxDepth = 1;
+
+  // Шаг радиуса такой, чтобы внешнее кольцо (листья) вместило все листья с зазором unit
+  var R = (L * unit) / (2 * Math.PI * maxDepth);
+  if (R < 200) R = 200;
+
+  // Листья получают слоты 0..L-1; внутренний узел — середина диапазона своих листьев
+  var lo = {}, hi = {}, order = 0;
+  function assign(id) {
+    var kids = tree.children[id] || [];
+    if (!kids.length) { lo[id] = order; hi[id] = order; order++; }
+    else { kids.forEach(assign); lo[id] = lo[kids[0]]; hi[id] = hi[kids[kids.length - 1]]; }
+  }
+  tree.roots.forEach(assign);
+
+  var nodes = [];
+  Object.keys(depth).forEach(function (id) {
+    var isLeaf = !(tree.children[id] && tree.children[id].length);
+    var r = isLeaf ? maxDepth * R : depth[id] * R;
+    var mid = (lo[id] + hi[id]) / 2;
+    var a = (mid / L) * 2 * Math.PI - Math.PI / 2;
+    nodes.push({ id: id, level: depth[id], x: r * Math.cos(a), y: r * Math.sin(a), node: tree.byId[id] });
+  });
+
+  var pos = {};
+  nodes.forEach(function (n) { pos[n.id] = n; });
+  var links = [];
+  nodes.forEach(function (n) {
+    if (n.level === 1) links.push({ x1: 0, y1: 0, x2: n.x, y2: n.y });
+    (tree.children[n.id] || []).forEach(function (c) {
+      var cn = pos[c];
+      if (cn) links.push({ x1: n.x, y1: n.y, x2: cn.x, y2: cn.y });
+    });
+  });
+
+  return { nodes: nodes, links: links };
 }
 
 function buildMindmap() {
   var tree = mindmapTree();
-  var nodes = [];
-  var links = [];
-  var R = mm.RADIUS;
-
-  function place(node, level, a0, a1) {
-    var a = (a0 + a1) / 2;
-    var x = level * R * Math.cos(a);
-    var y = level * R * Math.sin(a);
-    nodes.push({ id: node.id, x: x, y: y, level: level, node: node });
-    var kids = tree.children[node.id] || [];
-    if (kids.length) {
-      var span = a1 - a0;
-      var kw = 0;
-      kids.forEach(function (k) { kw += mindmapWeight(k.id, tree.children); });
-      var acc = a0;
-      kids.forEach(function (k) {
-        var w = mindmapWeight(k.id, tree.children);
-        var next = acc + span * (w / kw);
-        place(k, level + 1, acc, next);
-        acc = next;
-      });
-    }
-  }
-
-  if (tree.roots.length) {
-    if (tree.roots.length === 1) {
-      place(tree.roots[0], 1, 0, Math.PI * 2);
-    } else {
-      var total = 0;
-      tree.roots.forEach(function (r) { total += mindmapWeight(r.id, tree.children); });
-      var acc = -Math.PI / 2;
-      tree.roots.forEach(function (r) {
-        var w = mindmapWeight(r.id, tree.children);
-        var span = Math.PI * 2 * (w / total);
-        place(r, 1, acc, acc + span);
-        acc += span;
-      });
-    }
-  }
-
-  var pos = {};
-  nodes.forEach(function (p) { pos[p.id] = p; });
-  nodes.forEach(function (p) {
-    if (p.level === 1) links.push({ x1: 0, y1: 0, x2: p.x, y2: p.y });
-    (tree.children[p.id] || []).forEach(function (c) {
-      var cn = pos[c.id];
-      if (cn) links.push({ x1: p.x, y1: p.y, x2: cn.x, y2: cn.y });
-    });
-  });
-
-  mm.layout = { nodes: nodes, links: links };
+  var lay = mindmapLayout(tree);
+  mm.layout = { nodes: lay.nodes, links: lay.links };
   renderMindmapLayout();
   fitMindmap();
 }
