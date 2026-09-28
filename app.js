@@ -1,11 +1,11 @@
 /**
  * KICS Feature Map — Feature planning tool for PMs
- * v63 — Linear-style UI, cloud persistence and interactive mind map
+ * v64 — table duplication, cloud persistence and interactive mind map
  */
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v63';
+const APP_VERSION = 'v64';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
