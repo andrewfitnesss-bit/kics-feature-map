@@ -701,8 +701,9 @@ mark { background:#ffeb3b; color:#1d1d1f; border-radius:2px; padding:0 1px; }
   .header-top { flex-wrap:wrap; gap:8px; }
   .workspace-brand { order:1; flex:1; }
   .map-selector { order:2; }
-  .view-switcher { order:3; }
-  .header-actions { order:4; width:100%; margin-left:0; }
+  .search-wrap { order:3; }
+  .view-switcher { order:4; }
+  .header-actions { order:5; width:100%; margin-left:0; }
   .search-wrap { width:auto; flex:1; }
   .title { max-width:42vw; }
   .tag-filter-bar { padding-inline:12px; overflow-x:auto; flex-wrap:nowrap; }
@@ -780,7 +781,7 @@ mark { background:#ffeb3b; color:#1d1d1f; border-radius:2px; padding:0 1px; }
   transition: all var(--transition);
 }
 .mindmap-tool-btn:hover { color:var(--accent); border-color:var(--accent); background:var(--accent-light); }
-.mindmap-close-btn:hover { color:var(--red); border-color:var(--red); background:var(--red-light); }
+.mindmap-switcher { margin-left: 6px; }
 .mindmap-zoom-label { width:52px; text-align:center; font-size:12px; font-weight:700; color:var(--text-secondary); }
 .mindmap-canvas { position:relative; flex:1; overflow:hidden; cursor:grab; user-select:none; }
 .mindmap-canvas.is-panning { cursor:grabbing; }
@@ -895,29 +896,28 @@ mark { background:#ffeb3b; color:#1d1d1f; border-radius:2px; padding:0 1px; }
 .save-status { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; min-width: 90px; text-align: right; }
 
 /* ---- Низ карточки: сворачивание + заметка ---- */
-.card-footer { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; }
+.card-footer { display: flex; align-items: center; justify-content: flex-start; gap: 6px; margin-top: auto; }
 .collapse-toggle {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 18px;
-  padding: 0 6px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--text-tertiary);
-  font: 700 11px/1 inherit;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: 700 12px/1 inherit;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--transition), color var(--transition), background var(--transition), border-color var(--transition);
+  box-shadow: var(--shadow-sm);
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
 }
-.card:hover .collapse-toggle { opacity: 1; }
-.collapse-toggle:hover { color: var(--accent); background: var(--accent-light); }
-.collapse-toggle.is-collapsed { opacity: 1; background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+.collapse-toggle:hover { color: var(--accent); background: var(--accent-light); border-color: var(--accent); }
+.collapse-toggle.is-collapsed { background: var(--accent); color: #fff; border-color: var(--accent); }
 .collapse-chev { line-height: 1; }
-.collapse-count { font-size: 10px; font-weight: 700; }
+.collapse-count { font-size: 11px; font-weight: 700; }
 
-/* ---- Заметка (как в MS Office) ---- */
+/* ---- Заметка (жёлтый значок на каждой карточке) ---- */
 .card-note-badge {
   display: inline-flex;
   align-items: center;
@@ -925,13 +925,16 @@ mark { background:#ffeb3b; color:#1d1d1f; border-radius:2px; padding:0 1px; }
   width: 20px;
   height: 20px;
   flex: 0 0 20px;
+  margin-left: auto;
   border-radius: 6px;
-  background: #fff6c9;
-  border: 1px solid #e8d876;
-  color: #9a7b00;
-  cursor: help;
+  background: #fffdf0;
+  border: 1px dashed #d9cf7a;
+  color: #c2a92f;
+  cursor: pointer;
+  opacity: .85;
 }
-.card-note-badge:hover { background: #ffef9e; }
+.card-note-badge.has-note { background: #fff6c9; border: 1px solid #e8d876; color: #9a7b00; opacity: 1; }
+.card-note-badge:hover { background: #ffef9e; opacity: 1; }
 .note-popover {
   position: fixed;
   z-index: 5000;

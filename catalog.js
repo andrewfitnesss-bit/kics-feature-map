@@ -37,7 +37,7 @@ async function restoreDeletion() {
   if (!canEdit()) return;
   var entry = (state.trash || []).slice(-1)[0];
   if (!entry) return showToast('Нет снимков удаления');
-  if (!await window.KicsUI.confirm({ title: 'Отменить последнее изменение?', message: entry.label + ' · ' + entry.at + '. Вся таблица вернётся к состоянию перед удалением. Более поздние изменения будут заменены.', confirmLabel: 'Отменить' })) return;
+  if (!await window.KicsUI.confirm({ title: 'Откатить последнее изменение?', message: entry.label + ' · ' + entry.at + '. Вся таблица вернётся к состоянию перед удалением. Более поздние изменения будут заменены.', confirmLabel: 'Откат', cancelLabel: 'Отмена' })) return;
   var trash = state.trash.slice(0, -1);
   applyMap({ id: state.mapId, title: state.boardTitle, data: entry.data }, true);
   state.trash = trash;
@@ -68,7 +68,7 @@ saveMapRemote = function () {
         setSaveStatus(dirtyRevision === revision ? 'Сохранено' : 'Есть несохранённые изменения');
       }
       return true;
-    } catch (e) { setSaveStatus('Ошибка сохранения — нажмите «Повторить»'); showError(e.message); return false; }
+    } catch (e) { setSaveStatus('Ошибка сохранения — нажмите «Сохранить»'); showError(e.message); return false; }
   });
   return saving;
 };
@@ -111,7 +111,7 @@ function descendantCount(id) {
 function showNotePopover(anchor, text) {
   var pop = document.createElement('div');
   pop.className = 'note-popover';
-  var head = document.createElement('div'); head.className = 'note-popover-head'; head.textContent = 'to do';
+  var head = document.createElement('div'); head.className = 'note-popover-head'; head.textContent = 'Заметка';
   var body = document.createElement('div'); body.className = 'note-popover-body'; body.textContent = text || '(пустая заметка)';
   pop.appendChild(head); pop.appendChild(body);
   document.body.appendChild(pop);
@@ -125,20 +125,19 @@ function showNotePopover(anchor, text) {
   return pop;
 }
 
+var hideNotes = false;
 var baseCreateCard = createCardElement;
 createCardElement = function (node) {
   var card = baseCreateCard(node);
   if (node.type === 'comment') return card;
 
   var hasChildren = getChildren(node.id).length > 0;
-  var comment = getCommentFor(node.id);
-  var hasNote = !!(comment && comment.note);
-  if (!hasChildren && !hasNote) return card;
+  if (!hasChildren && hideNotes) return card;
 
   var footer = document.createElement('div');
   footer.className = 'card-footer';
 
-  // Сворачивание — без большой кнопки, только компактный переключатель со счётчиком
+  // Сворачивание — компактный переключатель со счётчиком скрытых элементов
   if (hasChildren) {
     var collapsed = collapsedBranches.has(node.id);
     var toggle = document.createElement('button');
@@ -161,21 +160,23 @@ createCardElement = function (node) {
     footer.appendChild(toggle);
   }
 
-  // Заметка — маленький значок справа внизу, подпись «to do» и текст при наведении
-  if (hasNote) {
+  // Жёлтый значок заметки — на каждой карточке, всегда справа внизу
+  if (!hideNotes) {
     var badge = document.createElement('span');
-    badge.className = 'card-note-badge';
-    badge.title = 'to do';
-    badge.setAttribute('role', 'img');
-    badge.setAttribute('aria-label', 'Заметка: ' + comment.note);
+    badge.className = 'card-note-badge' + (node.note ? ' has-note' : '');
+    badge.title = node.note || 'Добавить заметку';
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('aria-label', node.note ? ('Заметка: ' + node.note) : 'Добавить заметку');
     badge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3h16a1 1 0 0 1 1 1v10l-6 6H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 14h6l-6 6z"/></svg>';
     var pop = null;
-    badge.addEventListener('mouseenter', function () { pop = showNotePopover(badge, comment.note); });
-    badge.addEventListener('mouseleave', function () { if (pop) { pop.remove(); pop = null; } });
+    if (node.note) {
+      badge.addEventListener('mouseenter', function () { pop = showNotePopover(badge, node.note); });
+      badge.addEventListener('mouseleave', function () { if (pop) { pop.remove(); pop = null; } });
+    }
     badge.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (canEdit()) openCommentEditor(comment.id);
-      else { pop = showNotePopover(badge, comment.note); }
+      if (canEdit()) openNoteEditor(node.id);
+      else if (node.note) { pop = showNotePopover(badge, node.note); }
     });
     footer.appendChild(badge);
   }
@@ -203,6 +204,20 @@ document.addEventListener('DOMContentLoaded', function () {
   if (restoreBtn) restoreBtn.onclick = restoreDeletion;
   var retryBtn = document.getElementById('catalogRetry');
   if (retryBtn) retryBtn.onclick = saveMapRemote;
+
+  // Скрыть заметки — переключатель отображения (не удаляет данные, столбец справа не меняется)
+  var hideNotesBtn = document.getElementById('hideNotesBtn');
+  if (hideNotesBtn) {
+    var updateHideNotesLabel = function () {
+      hideNotesBtn.innerHTML = '<span>' + (hideNotes ? '👁' : '🙈') + '</span>' + (hideNotes ? 'Показать заметки' : 'Скрыть заметки');
+    };
+    updateHideNotesLabel();
+    hideNotesBtn.onclick = function () {
+      hideNotes = !hideNotes;
+      updateHideNotesLabel();
+      render();
+    };
+  }
 
   var shareBtn = document.getElementById('shareBtn');
   if (shareBtn) { shareBtn.disabled = true; shareBtn.title = 'Общий доступ пока не настроен'; }

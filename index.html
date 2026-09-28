@@ -52,23 +52,25 @@
           <button id="newMapBtn" class="icon-btn" aria-label="Новая таблица" title="Новая таблица">＋</button>
         </div>
 
+        <div class="search-wrap">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="searchInput" class="search-input" placeholder="Поиск…" aria-label="Поиск по карточкам и тегам" autocomplete="off">
+          <button id="clearSearch" class="clear-search-btn" style="display:none" aria-label="Очистить поиск" title="Очистить">✕</button>
+        </div>
+
         <div class="view-switcher" role="group" aria-label="Представление">
           <button id="boardViewBtn" class="view-switcher-btn is-active" type="button" aria-pressed="true">Доска</button>
           <button id="mindmapBtn" class="view-switcher-btn" type="button" aria-pressed="false">Майндкарта</button>
         </div>
 
         <div class="header-actions">
-          <div class="search-wrap">
-            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input type="text" id="searchInput" class="search-input" placeholder="Поиск…" aria-label="Поиск по карточкам и тегам" autocomplete="off">
-            <button id="clearSearch" class="clear-search-btn" style="display:none" aria-label="Очистить поиск" title="Очистить">✕</button>
-          </div>
           <button id="viewToggleBtn" class="btn btn-secondary mode-btn" title="Режим просмотра/редактирования">👁 Просмотр</button>
           <div class="more-actions">
             <button id="moreActionsBtn" class="icon-btn" type="button" aria-label="Дополнительные действия" aria-expanded="false" title="Дополнительные действия">•••</button>
             <div id="moreActionsMenu" class="action-menu" hidden>
               <button id="addColumnBtn" class="action-menu-item" type="button"><span>＋</span>Добавить колонку</button>
               <button id="duplicateMapBtn" class="action-menu-item" type="button"><span>⧉</span>Дублировать таблицу</button>
+              <button id="hideNotesBtn" class="action-menu-item" type="button"><span>🙈</span>Скрыть заметки</button>
               <button id="shareBtn" class="action-menu-item" type="button"><span>↗</span>Поделиться</button>
               <div class="action-menu-separator"></div>
               <button id="exportBtn" class="action-menu-item" type="button"><span>↓</span>Экспорт JSON</button>
@@ -93,7 +95,7 @@
         </div>
         <div class="toolbar-group toolbar-right">
           <button id="catalogRestore" class="btn btn-secondary btn-sm" title="Отменить последнее удаление">↶ Отменить</button>
-          <button id="catalogRetry" class="btn btn-secondary btn-sm" title="Повторить сохранение">Повторить</button>
+          <button id="catalogRetry" class="btn btn-secondary btn-sm" title="Сохранить сейчас">Сохранить</button>
           <span id="catalogSave" class="save-status" role="status">Сохранено</span>
         </div>
       </div>
@@ -211,7 +213,10 @@
         <button id="mindmapZoomIn" class="mindmap-tool-btn" title="Увеличить">＋</button>
         <button id="mindmapFit" class="mindmap-tool-btn" title="Показать всё дерево">⤢</button>
         <button id="mindmapCenter" class="mindmap-tool-btn" title="Вернуться к центру">◎</button>
-        <button id="mindmapClose" class="mindmap-tool-btn mindmap-close-btn" title="Закрыть">✕</button>
+        <div class="view-switcher mindmap-switcher" role="group" aria-label="Представление">
+          <button id="mindmapBoardBtn" class="view-switcher-btn" type="button" aria-pressed="false">Доска</button>
+          <button id="mindmapActiveBtn" class="view-switcher-btn is-active" type="button" aria-pressed="true">Майндкарта</button>
+        </div>
       </div>
     </div>
     <div id="mindmapCanvas" class="mindmap-canvas">

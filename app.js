@@ -1192,6 +1192,38 @@ function openCommentEditor(commentId) {
   ta.focus();
 }
 
+// Редактор заметки карточки (жёлтый значок) — редактирует node.note
+function openNoteEditor(nodeId) {
+  var n = getNodeById(nodeId);
+  if (!n) return;
+  var old = document.getElementById('noteEditorOverlay');
+  if (old) old.remove();
+
+  var overlay = document.createElement('div');
+  overlay.className = 'modal-overlay'; overlay.id = 'noteEditorOverlay';
+  var modal = document.createElement('div'); modal.className = 'modal modal-wide';
+  modal.innerHTML = '<div class="modal-header"><h3>Заметка</h3></div>';
+  var body = document.createElement('div'); body.className = 'modal-body';
+  var ta = document.createElement('textarea'); ta.className = 'modal-textarea'; ta.rows = 6; ta.placeholder = 'Текст заметки…'; ta.value = n.note || '';
+  body.appendChild(ta);
+  var footer = document.createElement('div'); footer.className = 'modal-footer';
+  var del = document.createElement('button'); del.className = 'btn btn-danger'; del.textContent = 'Очистить';
+  var save = document.createElement('button'); save.className = 'btn btn-primary'; save.textContent = 'Сохранить';
+  var cancel = document.createElement('button'); cancel.className = 'btn btn-secondary'; cancel.textContent = 'Отмена';
+  cancel.addEventListener('click', function () { overlay.remove(); });
+  del.addEventListener('click', function () { rememberDeletion('Deletion snapshot'); n.note = ''; overlay.remove(); scheduleSave(); render(); });
+  save.addEventListener('click', function () { n.note = ta.value.trim(); overlay.remove(); scheduleSave(); render(); });
+  footer.appendChild(del);
+  var right = document.createElement('div'); right.className = 'modal-footer-actions';
+  right.appendChild(cancel); right.appendChild(save);
+  footer.appendChild(right);
+  modal.appendChild(body); modal.appendChild(footer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+  ta.focus();
+}
+
 // Рендер узла-комментария как компактной карточки комментария
 function createCommentNodeElement(node) {
   var card = document.createElement('div');
@@ -1225,14 +1257,14 @@ function createCardElement(node) {
       e.stopPropagation();
       var items = [
         { value: 'child', label: 'Добавить дочернюю карточку' },
-        { value: 'edit', label: 'Редактировать' }
+        { value: 'edit', label: 'Редактировать' },
+        { value: 'note', label: 'Заметка' },
+        { value: 'delete', label: 'Удалить' }
       ];
-      if (isLeaf(node)) items.push({ value: 'note', label: 'Заметка' });
-      items.push({ value: 'delete', label: 'Удалить' });
       openSelectMenu(mb, items, function (val) {
         if (val === 'child') addChildNode(node);
         else if (val === 'edit') openModal(node.id);
-        else if (val === 'note') addComment(node.id);
+        else if (val === 'note') openNoteEditor(node.id);
         else if (val === 'delete') deleteNode(node.id);
       });
     });
@@ -1304,8 +1336,6 @@ function createCardElement(node) {
   card.appendChild(m);
 
   if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag'; ts.innerHTML = ht(tg); if (canEdit()) { ts.title = 'Нажми, чтобы изменить тег'; ts.addEventListener('click', function (e) { e.stopPropagation(); openTagEditor(node.id, tg); }); } td.appendChild(ts); }); card.appendChild(td); }
-
-  if (node.note) { var h = document.createElement('div'); h.className = 'card-hint'; h.textContent = node.note; card.appendChild(h); }
 
   if (canEdit()) card.addEventListener('click', function () { openModal(node.id); });
   else card.addEventListener('click', function () { openCardView(node.id); });
@@ -2046,7 +2076,7 @@ function initEvents() {
   if (mmBtn) mmBtn.addEventListener('click', openMindmap);
   var boardViewBtn = document.getElementById('boardViewBtn');
   if (boardViewBtn) boardViewBtn.addEventListener('click', closeMindmap);
-  var mmClose = document.getElementById('mindmapClose');
+  var mmClose = document.getElementById('mindmapBoardBtn');
   if (mmClose) mmClose.addEventListener('click', closeMindmap);
   var mmZoomIn = document.getElementById('mindmapZoomIn');
   if (mmZoomIn) mmZoomIn.addEventListener('click', function () { zoomMindmap(1.2); });
