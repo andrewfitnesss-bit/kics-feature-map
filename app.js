@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v66';
+const APP_VERSION = 'v67';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1362,27 +1362,8 @@ function computeColWidth() {
 }
 
 function alignHeaders() {
-  var headers = $$('.column-header'); if (!headers.length) return;
-  var container = $('#columnsContainer'); if (!container) return;
-  var cr = container.getBoundingClientRect();
-  var rs = getComputedStyle(document.documentElement);
-  var step = parseFloat(rs.getPropertyValue('--col-step')) || 276;   // карточка + gap 8 + отступ sub-column 8
-  var headW = parseFloat(rs.getPropertyValue('--col-w')) || 260;
-
-  for (var ci = 0; ci < headers.length; ci++) {
-    var block = container.querySelector('.card-block[data-depth="' + ci + '"]');
-    var cardEl = block ? block.firstElementChild : null;
-    var left;
-    if (cardEl && cardEl.classList.contains('card')) {
-      left = cardEl.getBoundingClientRect().left - cr.left;
-    } else if (ci > 0) {
-      left = parseFloat(headers[ci - 1].style.left) + step;
-    } else {
-      left = ci * step;
-    }
-    headers[ci].style.left = left + 'px';
-    headers[ci].style.width = headW + 'px';
-  }
+  // Заголовки колонок — статичная flex-раскладка (см. .columns-headers в styles.css).
+  // Динамическое позиционирование отключено: заголовки больше не двигаются и не липнут при скролле.
 }
 
 var GAP = 10, DEF_H = 60;
