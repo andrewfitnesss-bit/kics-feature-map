@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v68';
+const APP_VERSION = 'v69';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1255,15 +1255,23 @@ function createCardElement(node) {
     var mb = document.createElement('button'); mb.className = 'card-action-btn card-menu-btn'; mb.textContent = '\u22ee'; mb.title = 'Действия'; mb.setAttribute('aria-label', 'Действия с карточкой «' + (node.title || 'Без названия') + '»');
     mb.addEventListener('click', function (e) {
       e.stopPropagation();
+      var hasChildren = getChildrenInNextCol(node).length > 0;
+      var isCollapsed = hasChildren && collapsedBranches.has(node.id);
       var items = [
         { value: 'child', label: 'Добавить дочернюю карточку' },
-        { value: 'edit', label: 'Редактировать' },
+        { value: 'edit', label: 'Редактировать' }
+      ];
+      // Свернуть/развернуть — только если у карточки есть дочерние (актуально для ветки)
+      if (hasChildren) items.push(isCollapsed ? { value: 'expand', label: 'Развернуть' } : { value: 'collapse', label: 'Свернуть' });
+      items.push(
         { value: 'note', label: 'Заметка' },
         { value: 'delete', label: 'Удалить' }
-      ];
+      );
       openSelectMenu(mb, items, function (val) {
         if (val === 'child') addChildNode(node);
         else if (val === 'edit') openModal(node.id);
+        else if (val === 'collapse') { collapsedBranches.add(node.id); render(); }
+        else if (val === 'expand') { collapsedBranches.delete(node.id); render(); }
         else if (val === 'note') openNoteEditor(node.id);
         else if (val === 'delete') deleteNode(node.id);
       });
