@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v67';
+const APP_VERSION = 'v68';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
