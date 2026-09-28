@@ -13,6 +13,7 @@
     node.status = STATUSES[node.status] ? node.status : 'none';
     node.dueDate = typeof node.dueDate === 'string' ? node.dueDate : '';
     node.note = typeof node.note === 'string' ? node.note : '';
+    node.memo = typeof node.memo === 'string' ? node.memo : '';
     node.color = COLORS[node.color] ? node.color : 'none';
     node.type = node.type === 'comment' ? 'comment' : 'card';
     node.targetId = node.targetId || null;

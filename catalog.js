@@ -18,7 +18,7 @@ deleteMap = function () { showToast('Удаление целой таблицы 
 function catalogFiltersActive() { return !!(state.searchQuery || state.filterTag || catalogStatus || catalogHorizon); }
 function catalogMatches(node) {
   var comment = getCommentFor(node.id);
-  var text = [node.title, node.note, (node.tags || []).join(' '), comment && comment.note, comment && comment.title].join(' ').toLowerCase();
+  var text = [node.title, node.note, node.memo, (node.tags || []).join(' '), comment && comment.note, comment && comment.title].join(' ').toLowerCase();
   return (!state.searchQuery || text.includes(state.searchQuery.toLowerCase())) &&
     (!catalogStatus || node.status === catalogStatus) &&
     (!catalogHorizon || node.dueDate === catalogHorizon) &&
@@ -163,20 +163,20 @@ createCardElement = function (node) {
   // Жёлтый значок заметки — на каждой карточке, всегда справа внизу
   if (!hideNotes) {
     var badge = document.createElement('span');
-    badge.className = 'card-note-badge' + (node.note ? ' has-note' : '');
-    badge.title = node.note || 'Добавить заметку';
+    badge.className = 'card-note-badge' + (node.memo ? ' has-note' : '');
+    badge.title = node.memo || 'Добавить заметку';
     badge.setAttribute('role', 'button');
-    badge.setAttribute('aria-label', node.note ? ('Заметка: ' + node.note) : 'Добавить заметку');
+    badge.setAttribute('aria-label', node.memo ? ('Заметка: ' + node.memo) : 'Добавить заметку');
     badge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3h16a1 1 0 0 1 1 1v10l-6 6H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 14h6l-6 6z"/></svg>';
     var pop = null;
-    if (node.note) {
-      badge.addEventListener('mouseenter', function () { pop = showNotePopover(badge, node.note); });
+    if (node.memo) {
+      badge.addEventListener('mouseenter', function () { pop = showNotePopover(badge, node.memo); });
       badge.addEventListener('mouseleave', function () { if (pop) { pop.remove(); pop = null; } });
     }
     badge.addEventListener('click', function (e) {
       e.stopPropagation();
       if (canEdit()) openNoteEditor(node.id);
-      else if (node.note) { pop = showNotePopover(badge, node.note); }
+      else if (node.memo) { pop = showNotePopover(badge, node.memo); }
     });
     footer.appendChild(badge);
   }

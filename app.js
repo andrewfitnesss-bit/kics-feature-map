@@ -42,7 +42,7 @@ let modelIndex = null;
 function nid() { return 'n' + (nextId++); }
 
 function createNode(parentId, colIndex, title, type) {
-  return { id: nid(), parentId: parentId || null, colIndex, title: title || '', tags: [], status: 'none', dueDate: '', note: '', color: 'none', type: type || 'card', targetId: null, children: [] };
+  return { id: nid(), parentId: parentId || null, colIndex, title: title || '', tags: [], status: 'none', dueDate: '', note: '', memo: '', color: 'none', type: type || 'card', targetId: null, children: [] };
 }
 
 function normalizeNode(node) {
@@ -105,7 +105,7 @@ function isLeaf(node) {
   return !state.nodes.some(function (c) { return c.parentId === node.id && c.type !== 'comment' && c.colIndex === node.colIndex + 1; });
 }
 function nodeMatchesFilter(node) {
-  if (state.searchQuery) { var q = state.searchQuery.toLowerCase(); if (node.title.toLowerCase().indexOf(q) === -1 && node.note.toLowerCase().indexOf(q) === -1 && !node.tags.some(function (t) { return t.toLowerCase().indexOf(q) !== -1; })) return false; }
+  if (state.searchQuery) { var q = state.searchQuery.toLowerCase(); if (node.title.toLowerCase().indexOf(q) === -1 && node.note.toLowerCase().indexOf(q) === -1 && (node.memo || '').toLowerCase().indexOf(q) === -1 && !node.tags.some(function (t) { return t.toLowerCase().indexOf(q) !== -1; })) return false; }
   var ct = state.selectedTags[node.colIndex]; if (ct && ct.size > 0 && !node.tags.some(function (t) { return ct.has(t); })) return false;
   return true;
 }
@@ -1192,7 +1192,7 @@ function openCommentEditor(commentId) {
   ta.focus();
 }
 
-// Редактор заметки карточки (жёлтый значок) — редактирует node.note
+// Редактор заметки карточки (жёлтый значок) — редактирует node.memo
 function openNoteEditor(nodeId) {
   var n = getNodeById(nodeId);
   if (!n) return;
@@ -1204,15 +1204,15 @@ function openNoteEditor(nodeId) {
   var modal = document.createElement('div'); modal.className = 'modal modal-wide';
   modal.innerHTML = '<div class="modal-header"><h3>Заметка</h3></div>';
   var body = document.createElement('div'); body.className = 'modal-body';
-  var ta = document.createElement('textarea'); ta.className = 'modal-textarea'; ta.rows = 6; ta.placeholder = 'Текст заметки…'; ta.value = n.note || '';
+  var ta = document.createElement('textarea'); ta.className = 'modal-textarea'; ta.rows = 6; ta.placeholder = 'Текст заметки…'; ta.value = n.memo || '';
   body.appendChild(ta);
   var footer = document.createElement('div'); footer.className = 'modal-footer';
   var del = document.createElement('button'); del.className = 'btn btn-danger'; del.textContent = 'Очистить';
   var save = document.createElement('button'); save.className = 'btn btn-primary'; save.textContent = 'Сохранить';
   var cancel = document.createElement('button'); cancel.className = 'btn btn-secondary'; cancel.textContent = 'Отмена';
   cancel.addEventListener('click', function () { overlay.remove(); });
-  del.addEventListener('click', function () { rememberDeletion('Deletion snapshot'); n.note = ''; overlay.remove(); scheduleSave(); render(); });
-  save.addEventListener('click', function () { n.note = ta.value.trim(); overlay.remove(); scheduleSave(); render(); });
+  del.addEventListener('click', function () { rememberDeletion('Deletion snapshot'); n.memo = ''; overlay.remove(); scheduleSave(); render(); });
+  save.addEventListener('click', function () { n.memo = ta.value.trim(); overlay.remove(); scheduleSave(); render(); });
   footer.appendChild(del);
   var right = document.createElement('div'); right.className = 'modal-footer-actions';
   right.appendChild(cancel); right.appendChild(save);
@@ -1336,6 +1336,9 @@ function createCardElement(node) {
   card.appendChild(m);
 
   if (node.tags.length > 0) { var td = document.createElement('div'); td.className = 'card-tags'; node.tags.forEach(function (tg) { var ts = document.createElement('span'); ts.className = 'card-tag'; ts.innerHTML = ht(tg); if (canEdit()) { ts.title = 'Нажми, чтобы изменить тег'; ts.addEventListener('click', function (e) { e.stopPropagation(); openTagEditor(node.id, tg); }); } td.appendChild(ts); }); card.appendChild(td); }
+
+  // Описание карточки — выводится на карточке (отдельно от заметки)
+  if (node.note) { var h = document.createElement('div'); h.className = 'card-hint'; h.textContent = node.note; card.appendChild(h); }
 
   if (canEdit()) card.addEventListener('click', function () { openModal(node.id); });
   else card.addEventListener('click', function () { openCardView(node.id); });
