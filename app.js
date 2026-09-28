@@ -348,6 +348,50 @@ async function newMap() {
   showToast('Таблица создана', 'success');
 }
 
+async function duplicateMap() {
+  if (!canEdit()) {
+    showToast('Дублировать таблицу может только владелец', 'error');
+    return;
+  }
+  if (!sb || !currentUser || !state.mapId) return;
+
+  var sourceTitle = state.boardTitle || 'Моя карта фич';
+  var duplicateTitle = sourceTitle + ' (копия)';
+  var copyState = {
+    columns: JSON.parse(JSON.stringify(state.columns)),
+    nodes: JSON.parse(JSON.stringify(state.nodes)),
+    nextId: nextId,
+    availableTags: JSON.parse(JSON.stringify(state.availableTags || []))
+  };
+
+  var { error } = await sb.from('maps').insert({
+    owner_id: currentUser.id,
+    title: duplicateTitle,
+    data: copyState
+  });
+  if (error) {
+    showError('не удалось дублировать таблицу: ' + error.message);
+    return;
+  }
+
+  var { data: created, error: readErr } = await sb
+    .from('maps')
+    .select('id,title,owner_id')
+    .eq('owner_id', currentUser.id)
+    .eq('title', duplicateTitle)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (readErr || !created) {
+    showError('таблица продублирована, но не удалось открыть её — обнови страницу');
+    return;
+  }
+
+  state.maps.unshift({ id: created.id, title: created.title, owner_id: created.owner_id, is_owner: true });
+  await loadMap(created.id);
+  showToast('Таблица продублирована', 'success');
+}
+
 async function deleteMap() {
   if (!isOwner) { showToast('Удалять таблицу может только владелец', 'error'); return; }
   var cur = state.maps.find(function (m) { return m.id === state.mapId; });
@@ -623,6 +667,8 @@ function renderMapSelector() {
   if (delBtn) delBtn.style.display = canEdit() ? 'flex' : 'none';
   var addColumnButton = document.getElementById('addColumnBtn');
   if (addColumnButton) addColumnButton.style.display = canEdit() ? 'flex' : 'none';
+  var duplicateButton = document.getElementById('duplicateMapBtn');
+  if (duplicateButton) duplicateButton.style.display = canEdit() ? 'flex' : 'none';
   var importButton = document.getElementById('importBtn');
   if (importButton) importButton.style.display = isOwner ? 'flex' : 'none';
 }
@@ -2037,6 +2083,8 @@ function initEvents() {
   if (newMapBtn) newMapBtn.addEventListener('click', function () { newMap(); });
   var delMapBtn = document.getElementById('deleteMapBtn');
   if (delMapBtn) delMapBtn.addEventListener('click', function () { deleteMap(); });
+  var duplicateMapBtn = document.getElementById('duplicateMapBtn');
+  if (duplicateMapBtn) duplicateMapBtn.addEventListener('click', function () { duplicateMap(); });
 
   // Переключатель Редактирование / Просмотр
   var vtBtn = document.getElementById('viewToggleBtn');
