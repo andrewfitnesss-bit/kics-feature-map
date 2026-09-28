@@ -868,6 +868,100 @@ mark { background:#ffeb3b; color:#1d1d1f; border-radius:2px; padding:0 1px; }
   pointer-events:none;
   backdrop-filter:blur(8px);
 }
+/* ---- Объединённая панель инструментов (вторая строка шапки) ---- */
+.header-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 0 8px;
+  flex-wrap: wrap;
+}
+.toolbar-group { display: flex; align-items: center; gap: 6px; }
+.toolbar-right { margin-left: auto; }
+.toolbar-label { font-size: 11px; font-weight: 650; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em; }
+.toolbar-select {
+  font-family: inherit;
+  font-size: 12px;
+  height: 28px;
+  padding: 0 26px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+}
+.toolbar-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+.save-status { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; min-width: 90px; text-align: right; }
+
+/* ---- Низ карточки: сворачивание + заметка ---- */
+.card-footer { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; }
+.collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: 700 11px/1 inherit;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition), color var(--transition), background var(--transition), border-color var(--transition);
+}
+.card:hover .collapse-toggle { opacity: 1; }
+.collapse-toggle:hover { color: var(--accent); background: var(--accent-light); }
+.collapse-toggle.is-collapsed { opacity: 1; background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+.collapse-chev { line-height: 1; }
+.collapse-count { font-size: 10px; font-weight: 700; }
+
+/* ---- Заметка (как в MS Office) ---- */
+.card-note-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 6px;
+  background: #fff6c9;
+  border: 1px solid #e8d876;
+  color: #9a7b00;
+  cursor: help;
+}
+.card-note-badge:hover { background: #ffef9e; }
+.note-popover {
+  position: fixed;
+  z-index: 5000;
+  width: 240px;
+  background: #fffdf2;
+  border: 1px solid #e8d876;
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 8px 10px;
+  pointer-events: none;
+}
+.note-popover-head {
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #9a7b00;
+  margin-bottom: 4px;
+}
+.note-popover-body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+
 @media (max-width: 768px) {
   .mindmap-toolbar { padding:8px 10px; }
   .mindmap-toolbar-title { font-size:14px; }

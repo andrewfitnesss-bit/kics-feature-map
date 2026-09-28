@@ -3,9 +3,9 @@
  * v64 — table duplication, cloud persistence and interactive mind map
  */
 
-const LS_KEY = 'kics_feature_map';
-const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v65';
+const LS_KEY = 'kics_next_feature_map';
+const LAST_MAP_KEY = 'kics_next_last_map_id';
+const APP_VERSION = 'v66';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -78,7 +78,7 @@ function rebuildChildren() {
     if (n.type !== 'comment' && isLeaf(n)) leafIds[n.id] = true;
   });
   state.nodes = state.nodes.filter(function (n) {
-    return n.type !== 'comment' || !!leafIds[n.targetId];
+    return n.type !== 'comment' || state.nodes.some(function (card) { return card.type !== 'comment' && card.id === n.targetId; });
   });
   var commentTargets = Object.create(null);
   state.nodes.forEach(function (n) {
@@ -223,7 +223,7 @@ function scheduleSave() {
 async function saveMapRemote() {
   if (!sb || !state.mapId) return;
   try {
-    const { error } = await sb.from('maps').update({
+    const { error } = await sb.from('maps_next').update({
       title: state.boardTitle,
       data: window.KicsModel.payload(state, nextId),
       updated_at: new Date().toISOString()
@@ -239,14 +239,14 @@ async function loadMaps() {
   if (!sb || !currentUser) return;
 
   // Свои карты
-  let { data: owned } = await sb.from('maps').select('id,title,owner_id').eq('owner_id', currentUser.id).order('created_at', { ascending: false });
+  let { data: owned } = await sb.from('maps_next').select('id,title,owner_id').eq('owner_id', currentUser.id).order('created_at', { ascending: false });
 
   // Карты, к которым есть доступ (шаринг)
   let { data: shares } = await sb.from('map_shares').select('map_id,email').eq('email', currentUser.email.toLowerCase());
   var sharedIds = (shares || []).map(function (r) { return r.map_id; });
   var sharedMaps = [];
   if (sharedIds.length) {
-    let { data: sm } = await sb.from('maps').select('id,title,owner_id').in('id', sharedIds);
+    let { data: sm } = await sb.from('maps_next').select('id,title,owner_id').in('id', sharedIds);
     if (sm) sharedMaps = sm;
   }
 
@@ -270,7 +270,7 @@ async function loadMaps() {
 async function loadMap(mapId) {
   var meta = state.maps.find(function (m) { return m.id === mapId; });
   if (!meta) return;
-  var { data, error } = await sb.from('maps').select('*').eq('id', mapId).maybeSingle();
+  var { data, error } = await sb.from('maps_next').select('*').eq('id', mapId).maybeSingle();
   if (error || !data) { showError('не удалось загрузить таблицу'); return; }
   applyMap(data, !!meta.is_owner);
   try { localStorage.setItem(LAST_MAP_KEY, mapId); } catch (e) {}
@@ -301,7 +301,7 @@ async function createFirstMap() {
 
 async function insertMap(title) {
   // Вставка без select/single, чтобы не падать на ошибке PGRST116
-  var { error } = await sb.from('maps').insert({
+  var { error } = await sb.from('maps_next').insert({
     owner_id: currentUser.id,
     title: title,
     data: window.KicsModel.payload(state, nextId)
@@ -310,7 +310,7 @@ async function insertMap(title) {
 
   // Читаем id только что созданной записи
   var { data: created, error: readErr } = await sb
-    .from('maps')
+    .from('maps_next')
     .select('id,title,owner_id')
     .eq('owner_id', currentUser.id)
     .order('created_at', { ascending: false })
@@ -388,7 +388,7 @@ async function duplicateMap() {
       title: duplicateTitle,
       data: copyState
     };
-    var { error } = await sb.from('maps').insert(created);
+    var { error } = await sb.from('maps_next').insert(created);
     if (error) {
       showError('не удалось дублировать таблицу: ' + error.message);
       return;
@@ -426,7 +426,7 @@ async function deleteMap() {
     danger: true
   });
   if (!approved) return;
-  var { error } = await sb.from('maps').delete().eq('id', state.mapId);
+  var { error } = await sb.from('maps_next').delete().eq('id', state.mapId);
   if (error) { showError('не удалось удалить: ' + error.message); return; }
   state.maps = state.maps.filter(function (m) { return m.id !== state.mapId; });
   if (state.maps.length === 0) {
@@ -492,6 +492,7 @@ async function deleteColumn(colIndex) {
   if (!canEdit()) return;
   if (colIndex < 0 || colIndex >= state.columns.length - 1) return;
 
+  if (state.columns.length <= 2) return;
   var col = state.columns[colIndex];
 
   // Собираем все карточки в этом столбце + их поддерево
@@ -520,6 +521,7 @@ async function deleteColumn(colIndex) {
   if (!approved) return;
 
   // Удаляем узлы
+  rememberDeletion('Column deletion');
   state.nodes = state.nodes.filter(function (n) { return !toDelete[n.id]; });
 
   // Удаляем сам столбец
@@ -702,6 +704,8 @@ function applyMap(map, ownerFlag) {
   state.mapId = map.id;
   state.boardTitle = map.title || 'KICS — Карта фич';
   var raw = map.data || {};
+  state.trash = raw.trash || [];
+  collapsedBranches.clear();
   state.columns = raw.columns && raw.columns.length ? raw.columns : defaultColumns();
   state.nodes = (raw.nodes || []).map(normalizeNode);
   nextId = raw.nextId || 1;
@@ -738,7 +742,7 @@ async function createNewMap() {
     setEmptyState();
   }
 
-  let { error } = await sb.from('maps').insert({
+  let { error } = await sb.from('maps_next').insert({
     owner_id: currentUser.id,
     title: state.boardTitle || 'Моя карта фич',
     data: window.KicsModel.payload(state, nextId)
@@ -752,7 +756,7 @@ async function createNewMap() {
 
   // Читаем id созданной карты отдельным запросом
   let { data: created, error: readErr } = await sb
-    .from('maps')
+    .from('maps_next')
     .select('id')
     .eq('owner_id', currentUser.id)
     .order('created_at', { ascending: false })
@@ -871,7 +875,7 @@ async function tryLoadSharedMap() {
   var params = new URLSearchParams(window.location.search);
   var token = params.get('share');
   if (!token || !sb) return;
-  var { data, error } = await sb.from('maps').select('*').eq('share_token', token).maybeSingle();
+  var { data, error } = await sb.from('maps_next').select('*').eq('share_token', token).maybeSingle();
   if (error || !data) { showError('Ссылка недействительна или таблица не найдена'); return; }
   applyMap(data, false);
   viewMode = true;
@@ -887,7 +891,7 @@ async function loadShareList() {
   var link = document.getElementById('shareLink');
   if (!link) return;
   if (!state.mapId) { link.value = ''; return; }
-  var { data, error } = await sb.from('maps').select('share_token').eq('id', state.mapId).maybeSingle();
+  var { data, error } = await sb.from('maps_next').select('share_token').eq('id', state.mapId).maybeSingle();
   if (!error && data && data.share_token) {
     link.value = window.location.origin + window.location.pathname + '?share=' + data.share_token;
   } else {
@@ -898,7 +902,7 @@ async function loadShareList() {
 async function generateShare() {
   if (!state.mapId) return;
   var token = 'm' + Math.random().toString(36).slice(2, 14) + Date.now().toString(36);
-  var { error } = await sb.from('maps').update({ share_token: token }).eq('id', state.mapId);
+  var { error } = await sb.from('maps_next').update({ share_token: token }).eq('id', state.mapId);
   if (error) { showError('не удалось создать ссылку: ' + error.message); return; }
   await loadShareList();
 }
@@ -1089,6 +1093,7 @@ function renderCardBlock(node, depth) {
   block.appendChild(createCardElement(node));
 
   var children = (node.colIndex < lastRealColIndex()) ? getChildrenInNextCol(node) : [];
+  if (collapsedBranches.has(node.id) && !catalogFiltersActive()) children = [];
   if (children.length > 0) {
     var sc = document.createElement('div'); sc.className = 'sub-column';
     children.forEach(function (ch) { sc.appendChild(renderCardBlock(ch, depth + 1)); });
@@ -1141,7 +1146,7 @@ function addComment(leafId) {
   if (!canEdit()) return;
   var leaf = getNodeById(leafId);
   if (!leaf) return;
-  if (!isLeaf(leaf)) {
+  if (leaf.type === 'comment') {
     showToast('Заметки доступны только для листовых карточек', 'error');
     return;
   }
@@ -1174,7 +1179,7 @@ function openCommentEditor(commentId) {
   var save = document.createElement('button'); save.className = 'btn btn-primary'; save.textContent = 'Сохранить';
   var cancel = document.createElement('button'); cancel.className = 'btn btn-secondary'; cancel.textContent = 'Отмена';
   cancel.addEventListener('click', function () { overlay.remove(); });
-  del.addEventListener('click', function () { c.note = ''; overlay.remove(); scheduleSave(); render(); });
+  del.addEventListener('click', function () { rememberDeletion('Deletion snapshot'); c.note = ''; overlay.remove(); scheduleSave(); render(); });
   save.addEventListener('click', function () { c.note = ta.value.trim(); overlay.remove(); scheduleSave(); render(); });
   footer.appendChild(del);
   var right = document.createElement('div'); right.className = 'modal-footer-actions';
@@ -1218,13 +1223,16 @@ function createCardElement(node) {
     var mb = document.createElement('button'); mb.className = 'card-action-btn card-menu-btn'; mb.textContent = '\u22ee'; mb.title = 'Действия'; mb.setAttribute('aria-label', 'Действия с карточкой «' + (node.title || 'Без названия') + '»');
     mb.addEventListener('click', function (e) {
       e.stopPropagation();
-      openSelectMenu(mb, [
+      var items = [
         { value: 'child', label: 'Добавить дочернюю карточку' },
-        { value: 'edit', label: 'Редактировать' },
-        { value: 'delete', label: 'Удалить' }
-      ], function (val) {
+        { value: 'edit', label: 'Редактировать' }
+      ];
+      if (isLeaf(node)) items.push({ value: 'note', label: 'Заметка' });
+      items.push({ value: 'delete', label: 'Удалить' });
+      openSelectMenu(mb, items, function (val) {
         if (val === 'child') addChildNode(node);
         else if (val === 'edit') openModal(node.id);
+        else if (val === 'note') addComment(node.id);
         else if (val === 'delete') deleteNode(node.id);
       });
     });
@@ -1413,7 +1421,7 @@ function syncHeights() {
 function addChildNode(pn) {
   if (!canEdit()) return;
   var ni = pn.colIndex + 1;
-  if (ni >= state.columns.length) { showToast('Сначала добавьте колонку справа', 'error'); return; }
+  if (ni >= commentColIndex()) { showToast('Сначала добавьте колонку справа', 'error'); return; }
   var ch = createNode(pn.id, ni, 'Новая фича');
   state.nodes.push(ch);
   rebuildChildren();
@@ -1434,6 +1442,7 @@ async function deleteNode(id) {
   state.nodes.forEach(function (x) {
     if (x.type === 'comment' && x.targetId && tr.has(x.targetId)) tr.add(x.id);
   });
+  rememberDeletion('Deletion snapshot');
   state.nodes = state.nodes.filter(function (x) { return !tr.has(x.id); });
   state.nodes.forEach(function (x) { x.children = x.children.filter(function (cid) { return !tr.has(cid); }); });
   invalidateModelIndex();

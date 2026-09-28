@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
@@ -84,6 +84,20 @@
           </div>
         </div>
       </div>
+      <div class="header-toolbar">
+        <div class="toolbar-group toolbar-filters">
+          <label class="toolbar-label" for="catalogStatus">Статус</label>
+          <select id="catalogStatus" class="toolbar-select" aria-label="Статус"><option value="">Все статусы</option></select>
+          <label class="toolbar-label" for="catalogHorizon">Горизонт</label>
+          <select id="catalogHorizon" class="toolbar-select" aria-label="Горизонт"><option value="">Все горизонты</option></select>
+        </div>
+        <div class="toolbar-group toolbar-right">
+          <button id="catalogRestore" class="btn btn-secondary btn-sm" title="Отменить последнее удаление">↶ Отменить</button>
+          <button id="catalogRetry" class="btn btn-secondary btn-sm" title="Повторить сохранение">Повторить</button>
+          <span id="catalogSave" class="save-status" role="status">Сохранено</span>
+        </div>
+      </div>
+
     </header>
 
     <!-- Строка тегов-фильтров (хаштеги) -->
@@ -218,5 +232,5 @@
   <script src="model.js?v=17"></script>
   <script src="ui.js?v=17"></script>
   <script src="app.js?v=19"></script>
-<script src="version-picker.js?v=66"></script></body>
+<script src="catalog.js?v=66"></script></body>
 </html>

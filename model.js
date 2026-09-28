@@ -56,7 +56,8 @@
       columns: state.columns,
       nodes: state.nodes,
       nextId: nextId,
-      availableTags: state.availableTags
+      availableTags: state.availableTags,
+      trash: state.trash || []
     };
   }
 
