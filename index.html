@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230071e3'/%3E%3Ctext x='8' y='12' font-size='10' text-anchor='middle' fill='white'%3EK%3C/text%3E%3C/svg%3E">
   <title>Карта фич ИБ‑продукта</title>
-  <link rel="stylesheet" href="styles.css?v=16">
+  <link rel="stylesheet" href="styles.css?v=17">
 </head>
 <body>
   <!-- Supabase JS (v2) — локальная копия, чтобы не грузить с CDN -->
@@ -39,30 +39,47 @@
     <!-- Header -->
     <header class="header">
       <div class="header-top">
-        <h1 class="title" id="boardTitle" title="Нажми, чтобы переименовать доску">KICS — Карта фич</h1>
-        <div class="map-selector">
-          <select id="mapSelect" class="map-select" title="Выбрать таблицу"></select>
-          <button id="newMapBtn" class="map-selector-btn" title="Новая таблица">＋</button>
-          <button id="deleteMapBtn" class="map-selector-btn danger" title="Удалить таблицу">🗑</button>
+        <div class="workspace-brand">
+          <div class="brand-mark" aria-hidden="true">K</div>
+          <div class="workspace-identity">
+            <span class="workspace-label">KICS workspace</span>
+            <h1 class="title" id="boardTitle" title="Нажми, чтобы переименовать доску">KICS — Карта фич</h1>
+          </div>
         </div>
+
+        <div class="map-selector">
+          <select id="mapSelect" class="map-select" aria-label="Выбрать таблицу" title="Выбрать таблицу"></select>
+          <button id="newMapBtn" class="icon-btn" aria-label="Новая таблица" title="Новая таблица">＋</button>
+        </div>
+
+        <div class="view-switcher" role="group" aria-label="Представление">
+          <button id="boardViewBtn" class="view-switcher-btn is-active" type="button" aria-pressed="true">Доска</button>
+          <button id="mindmapBtn" class="view-switcher-btn" type="button" aria-pressed="false">Майндкарта</button>
+        </div>
+
         <div class="header-actions">
           <div class="search-wrap">
             <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input type="text" id="searchInput" class="search-input" placeholder="Поиск по тегам и тексту…" autocomplete="off">
-            <button id="clearSearch" class="clear-search-btn" style="display:none" title="Очистить">✕</button>
+            <input type="text" id="searchInput" class="search-input" placeholder="Поиск…" aria-label="Поиск по карточкам и тегам" autocomplete="off">
+            <button id="clearSearch" class="clear-search-btn" style="display:none" aria-label="Очистить поиск" title="Очистить">✕</button>
           </div>
-          <button id="exportBtn" class="btn btn-secondary" title="Экспорт JSON">📥 Экспорт</button>
-          <button id="importBtn" class="btn btn-secondary" title="Импорт JSON">📤 Импорт</button>
-          <input type="file" id="importFile" accept=".json" style="display:none">
-          <button id="addColumnBtn" class="btn btn-secondary" title="Добавить столбец">➕ Колонка</button>
-          <button id="shareBtn" class="btn btn-secondary" title="Поделиться">🔗 Поделиться</button>
-          <button id="viewToggleBtn" class="btn btn-secondary" title="Режим просмотра/редактирования">👁 Просмотр</button>
-          <button id="mindmapBtn" class="btn btn-secondary" title="Открыть майндкарту">🧠 Майндкарта</button>
-          <div class="user-chip" id="userChip">
-            <div class="user-info">
-              <span id="userEmail" class="user-email"></span>
+          <button id="viewToggleBtn" class="btn btn-secondary mode-btn" title="Режим просмотра/редактирования">👁 Просмотр</button>
+          <div class="more-actions">
+            <button id="moreActionsBtn" class="icon-btn" type="button" aria-label="Дополнительные действия" aria-expanded="false" title="Дополнительные действия">•••</button>
+            <div id="moreActionsMenu" class="action-menu" hidden>
+              <button id="addColumnBtn" class="action-menu-item" type="button"><span>＋</span>Добавить колонку</button>
+              <button id="shareBtn" class="action-menu-item" type="button"><span>↗</span>Поделиться</button>
+              <div class="action-menu-separator"></div>
+              <button id="exportBtn" class="action-menu-item" type="button"><span>↓</span>Экспорт JSON</button>
+              <button id="importBtn" class="action-menu-item" type="button"><span>↑</span>Импорт JSON</button>
+              <input type="file" id="importFile" accept=".json" hidden>
+              <div class="action-menu-separator"></div>
+              <div class="action-menu-user">
+                <span id="userEmail" class="user-email"></span>
+              </div>
+              <button id="deleteMapBtn" class="action-menu-item action-menu-danger" type="button"><span>⌫</span>Удалить таблицу</button>
+              <button id="logoutBtn" class="action-menu-item" type="button"><span>↪</span>Выйти</button>
             </div>
-            <button id="logoutBtn" class="btn btn-secondary btn-sm" title="Выйти">Выйти</button>
           </div>
         </div>
       </div>
@@ -81,11 +98,11 @@
   </div>
 
   <!-- Modal for editing card -->
-  <div class="modal-overlay" id="modalOverlay" style="display:none">
-    <div class="modal" id="modal">
+  <div class="modal-overlay" id="modalOverlay" style="display:none" role="presentation">
+    <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="editCardHeading">
       <div class="modal-header">
-        <h3>Редактировать карточку</h3>
-        <button class="modal-close" id="modalClose">✕</button>
+        <h3 id="editCardHeading">Редактировать карточку</h3>
+        <button class="modal-close" id="modalClose" aria-label="Закрыть">✕</button>
       </div>
       <div class="modal-body">
         <label>Заголовок</label>
@@ -134,11 +151,11 @@
   </div>
 
   <!-- Share modal -->
-  <div class="modal-overlay" id="shareOverlay" style="display:none">
-    <div class="modal">
+  <div class="modal-overlay" id="shareOverlay" style="display:none" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareHeading">
       <div class="modal-header">
-        <h3>Поделиться таблицей</h3>
-        <button class="modal-close" id="shareClose">✕</button>
+        <h3 id="shareHeading">Поделиться таблицей</h3>
+        <button class="modal-close" id="shareClose" aria-label="Закрыть">✕</button>
       </div>
       <div class="modal-body">
         <p class="share-hint">Любой, у кого есть эта ссылка, откроет таблицу в режиме просмотра.</p>
@@ -156,11 +173,11 @@
   </div>
 
   <!-- Модалка просмотра карточки (read-only) -->
-  <div class="modal-overlay" id="cardViewOverlay" style="display:none">
-    <div class="modal modal-wide" id="cardViewModal">
+  <div class="modal-overlay" id="cardViewOverlay" style="display:none" role="presentation">
+    <div class="modal modal-wide" id="cardViewModal" role="dialog" aria-modal="true" aria-labelledby="cardViewTitle">
       <div class="modal-header">
         <h3 id="cardViewTitle"></h3>
-        <button class="modal-close" id="cardViewClose">✕</button>
+        <button class="modal-close" id="cardViewClose" aria-label="Закрыть">✕</button>
       </div>
       <div class="modal-body" id="cardViewBody"></div>
     </div>
@@ -195,6 +212,10 @@
   <!-- Версия приложения — всегда видна в правом нижнем углу -->
   <div id="versionBadge" class="version-fixed" title="Версия приложения"></div>
 
-  <script src="app.js?v=16"></script>
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="model.js?v=17"></script>
+  <script src="ui.js?v=17"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>

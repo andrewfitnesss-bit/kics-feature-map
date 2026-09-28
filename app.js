@@ -1,11 +1,11 @@
 /**
  * KICS Feature Map — Feature planning tool for PMs
- * v12 — Supabase auth + cloud persistence
+ * v63 — Linear-style UI, cloud persistence and interactive mind map
  */
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v62';
+const APP_VERSION = 'v63';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -38,32 +38,67 @@ let state = {
   filterTag: null,
 };
 let nextId = 1;
+let modelIndex = null;
 function nid() { return 'n' + (nextId++); }
 
 function createNode(parentId, colIndex, title, type) {
   return { id: nid(), parentId: parentId || null, colIndex, title: title || '', tags: [], status: 'none', dueDate: '', note: '', color: 'none', type: type || 'card', targetId: null, children: [] };
 }
 
+function normalizeNode(node) {
+  return window.KicsModel.normalizeNode(node);
+}
+
+function invalidateModelIndex() { modelIndex = null; }
+function getModelIndex() {
+  if (!modelIndex) modelIndex = window.KicsModel.createIndex(state.nodes);
+  return modelIndex;
+}
+
 // ──────────────────────────────────────
 // 3. Helpers
 // ──────────────────────────────────────
-function getNodesByCol(i) { return state.nodes.filter(function (n) { return n.colIndex === i && n.type !== 'comment'; }); }
-function getChildren(pid) { return state.nodes.filter(function (n) { return n.parentId === pid && n.type !== 'comment'; }); }
-function getNodeById(id) { return state.nodes.find(function (n) { return n.id === id; }); }
-function getChildrenInNextCol(node) { return (node.children || []).map(function (cid) { return getNodeById(cid); }).filter(function (c) { return c && c.type !== 'comment' && c.colIndex === node.colIndex + 1; }); }
+function getNodesByCol(i) { return getModelIndex().cardsByColumn[i] || []; }
+function getChildren(pid) { return getModelIndex().childrenByParent[pid] || []; }
+function getNodeById(id) { return getModelIndex().byId[id]; }
+function getChildrenInNextCol(node) {
+  return getChildren(node.id).filter(function (c) {
+    return c && c.type !== 'comment' && c.colIndex === node.colIndex + 1;
+  });
+}
 function rebuildChildren() {
+  invalidateModelIndex();
   state.nodes.forEach(function (n) { n.children = []; });
   state.nodes.forEach(function (n) {
     if (n.type === 'comment') return;
     if (n.parentId) { var p = getNodeById(n.parentId); if (p && p.children.indexOf(n.id) === -1) p.children.push(n.id); }
   });
+  var leafIds = Object.create(null);
+  state.nodes.forEach(function (n) {
+    if (n.type !== 'comment' && isLeaf(n)) leafIds[n.id] = true;
+  });
+  state.nodes = state.nodes.filter(function (n) {
+    return n.type !== 'comment' || !!leafIds[n.targetId];
+  });
+  var commentTargets = Object.create(null);
+  state.nodes.forEach(function (n) {
+    if (n.type === 'comment' && n.targetId) commentTargets[n.targetId] = true;
+  });
+  Object.keys(leafIds).forEach(function (leafId) {
+    if (!commentTargets[leafId]) {
+      var comment = createNode(leafId, commentColIndex(), '', 'comment');
+      comment.targetId = leafId;
+      state.nodes.push(comment);
+    }
+  });
+  invalidateModelIndex();
 }
 // Индекс колонки «Комментарий» (всегда последняя)
 function commentColIndex() { return state.columns.length - 1; }
 // Индекс последней «настоящей» колонки (без комментария)
 function lastRealColIndex() { return state.columns.length - 2; }
 // Комментарий, привязанный к карточке-листу
-function getCommentFor(targetId) { return state.nodes.find(function (n) { return n.type === 'comment' && n.targetId === targetId; }); }
+function getCommentFor(targetId) { return getModelIndex().commentsByTarget[targetId]; }
 // Лист — узел без детей-карточек в следующей настоящей колонке
 function isLeaf(node) {
   if (node.type === 'comment') return false;
@@ -139,6 +174,7 @@ function eh(s) { var d = document.createElement('div'); d.textContent = s; retur
 function setEmptyState() {
   state.columns = [{ id: 'col0', name: 'Функциональная область' }, { id: 'col1', name: 'Верхнеуровневая фича' }, { id: 'col2', name: 'Фича' }, { id: 'col3', name: 'Сабфича' }, { id: 'col4', name: 'Комментарий' }];
   state.nodes = [];
+  invalidateModelIndex();
   nextId = 1;
   state.availableTags = [];
   state.filterTag = null;
@@ -150,17 +186,25 @@ function setEmptyState() {
 // ──────────────────────────────────────
 let errorBannerTimer = null;
 function showError(msg) {
+  if (window.KicsUI) {
+    window.KicsUI.toast('Ошибка: ' + msg, 'error', 7000);
+    return;
+  }
   var b = document.getElementById('errorBanner');
   if (!b) {
     b = document.createElement('div');
     b.id = 'errorBanner';
-    b.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);background:#ff3b30;color:#fff;padding:10px 18px;border-radius:10px;z-index:3000;font-size:13px;max-width:85%;box-shadow:0 4px 12px rgba(0,0,0,.25);cursor:pointer;line-height:1.4;';
+    b.className = 'error-banner';
     b.onclick = function () { b.remove(); };
     document.body.appendChild(b);
   }
   b.textContent = 'Ошибка: ' + msg;
   clearTimeout(errorBannerTimer);
   errorBannerTimer = setTimeout(function () { if (b.parentNode) b.remove(); }, 8000);
+}
+
+function showToast(message, type) {
+  if (window.KicsUI) window.KicsUI.toast(message, type || 'info');
 }
 
 // ──────────────────────────────────────
@@ -181,7 +225,7 @@ async function saveMapRemote() {
   try {
     const { error } = await sb.from('maps').update({
       title: state.boardTitle,
-      data: { columns: state.columns, nodes: state.nodes, nextId: nextId, availableTags: state.availableTags },
+      data: window.KicsModel.payload(state, nextId),
       updated_at: new Date().toISOString()
     }).eq('id', state.mapId);
     if (error) { console.error('Ошибка сохранения:', error); showError('не удалось сохранить: ' + error.message); }
@@ -240,7 +284,7 @@ async function createFirstMap() {
   try { var raw = localStorage.getItem(LS_KEY); if (raw) importData = JSON.parse(raw); } catch (e) {}
   if (importData && importData.nodes && importData.nodes.length) {
     state.columns = importData.columns && importData.columns.length ? importData.columns : defaultColumns();
-    state.nodes = importData.nodes;
+    state.nodes = window.KicsModel.normalizeNodes(importData.nodes);
     nextId = importData.nextId || 1;
     state.availableTags = importData.availableTags || [];
     rebuildChildren();
@@ -260,7 +304,7 @@ async function insertMap(title) {
   var { error } = await sb.from('maps').insert({
     owner_id: currentUser.id,
     title: title,
-    data: { columns: state.columns, nodes: state.nodes, nextId: nextId, availableTags: state.availableTags }
+    data: window.KicsModel.payload(state, nextId)
   });
   if (error) { console.error('insert error:', error); showError('не удалось создать таблицу: ' + error.message); return null; }
 
@@ -280,17 +324,19 @@ async function insertMap(title) {
 }
 
 async function newMap() {
-  // Проверка на дубликат имени
-  var title;
-  while (true) {
-    title = prompt('Название таблицы:', 'Новая таблица');
-    if (title === null) return;
-    title = title.trim();
-    if (!title) { alert('Имя не может быть пустым'); continue; }
-    var dupe = state.maps.some(function (m) { return m.title.toLowerCase() === title.toLowerCase(); });
-    if (dupe) { alert('Таблица с таким именем уже есть. Введи другое имя'); continue; }
-    break;
-  }
+  var title = await window.KicsUI.prompt({
+    title: 'Новая таблица',
+    message: 'Создайте отдельное пространство для новой карты продукта.',
+    inputLabel: 'Название',
+    defaultValue: 'Новая таблица',
+    confirmLabel: 'Создать',
+    validate: function (value) {
+      if (!value) return 'Введите название таблицы';
+      var duplicate = state.maps.some(function (map) { return map.title.toLowerCase() === value.toLowerCase(); });
+      return duplicate ? 'Таблица с таким названием уже существует' : true;
+    }
+  });
+  if (title === null) return;
   setEmptyState();
   var id = await insertMap(title);
   if (!id) return;
@@ -299,12 +345,19 @@ async function newMap() {
   isOwner = true;
   renderMapSelector();
   render();
+  showToast('Таблица создана', 'success');
 }
 
 async function deleteMap() {
-  if (!isOwner) { alert('Удалять может только владелец таблицы'); return; }
+  if (!isOwner) { showToast('Удалять таблицу может только владелец', 'error'); return; }
   var cur = state.maps.find(function (m) { return m.id === state.mapId; });
-  if (!confirm('Удалить таблицу «' + (cur ? cur.title : state.boardTitle) + '»? Это действие необратимо.')) return;
+  var approved = await window.KicsUI.confirm({
+    title: 'Удалить таблицу?',
+    message: 'Таблица «' + (cur ? cur.title : state.boardTitle) + '» и все её карточки будут удалены без возможности восстановления.',
+    confirmLabel: 'Удалить',
+    danger: true
+  });
+  if (!approved) return;
   var { error } = await sb.from('maps').delete().eq('id', state.mapId);
   if (error) { showError('не удалось удалить: ' + error.message); return; }
   state.maps = state.maps.filter(function (m) { return m.id !== state.mapId; });
@@ -320,6 +373,7 @@ async function deleteMap() {
     return;
   }
   await loadMap(state.maps[0].id);
+  showToast('Таблица удалена', 'success');
 }
 
 async function selectMap(mapId) {
@@ -327,11 +381,16 @@ async function selectMap(mapId) {
 }
 
 // Добавить столбец перед «Комментарием»
-function addColumn() {
-  if (!canEdit()) { alert('Переключитесь в режим редактирования, чтобы создавать столбцы'); return; }
-  var name = prompt('Название нового столбца:', 'Новый столбец');
+async function addColumn() {
+  if (!canEdit()) { showToast('Переключитесь в режим редактирования', 'error'); return; }
+  var name = await window.KicsUI.prompt({
+    title: 'Добавить колонку',
+    inputLabel: 'Название колонки',
+    defaultValue: 'Новый столбец',
+    confirmLabel: 'Добавить',
+    validate: function (value) { return value ? true : 'Введите название колонки'; }
+  });
   if (name === null) return;
-  name = name.trim() || 'Новый столбец';
 
   // Вставляем новый столбец перед «Комментарием» (последней колонкой)
   var newCol = { id: 'col' + Date.now(), name: name };
@@ -361,7 +420,7 @@ function collectSubtreeIds(rootId) {
 }
 
 // Удалить столбец по индексу (кроме последнего — комментария)
-function deleteColumn(colIndex) {
+async function deleteColumn(colIndex) {
   if (!canEdit()) return;
   if (colIndex < 0 || colIndex >= state.columns.length - 1) return;
 
@@ -382,8 +441,15 @@ function deleteColumn(colIndex) {
   });
 
   var count = Object.keys(toDelete).length;
-  if (count > 0 && !confirm('Удалить столбец «' + col.name + '» вместе с ' + count + ' карточками и их потомками?')) return;
-  if (count === 0 && !confirm('Удалить столбец «' + col.name + '»?')) return;
+  var approved = await window.KicsUI.confirm({
+    title: 'Удалить колонку?',
+    message: count > 0
+      ? 'Колонка «' + col.name + '», ' + count + ' карточек и их дочерние ветви будут удалены.'
+      : 'Колонка «' + col.name + '» будет удалена.',
+    confirmLabel: 'Удалить',
+    danger: true
+  });
+  if (!approved) return;
 
   // Удаляем узлы
   state.nodes = state.nodes.filter(function (n) { return !toDelete[n.id]; });
@@ -410,16 +476,26 @@ function openSelectMenu(anchor, options, onSelect) {
 
   var menu = document.createElement('div');
   menu.className = 'select-menu';
+  menu.setAttribute('role', 'menu');
 
   options.forEach(function (opt) {
     var item = document.createElement('div');
     item.className = 'select-menu-item';
+    item.setAttribute('role', 'menuitem');
+    item.tabIndex = 0;
     item.textContent = opt.label;
     item.addEventListener('mousedown', function (e) {
       e.preventDefault();
       e.stopPropagation();
       onSelect(opt.value);
       closeSelectMenu();
+    });
+    item.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelect(opt.value);
+        closeSelectMenu();
+      }
     });
     menu.appendChild(item);
   });
@@ -545,6 +621,10 @@ function renderMapSelector() {
   });
   var delBtn = document.getElementById('deleteMapBtn');
   if (delBtn) delBtn.style.display = canEdit() ? 'flex' : 'none';
+  var addColumnButton = document.getElementById('addColumnBtn');
+  if (addColumnButton) addColumnButton.style.display = canEdit() ? 'flex' : 'none';
+  var importButton = document.getElementById('importBtn');
+  if (importButton) importButton.style.display = isOwner ? 'flex' : 'none';
 }
 
 function applyMap(map, ownerFlag) {
@@ -553,7 +633,7 @@ function applyMap(map, ownerFlag) {
   state.boardTitle = map.title || 'KICS — Карта фич';
   var raw = map.data || {};
   state.columns = raw.columns && raw.columns.length ? raw.columns : defaultColumns();
-  state.nodes = raw.nodes || [];
+  state.nodes = (raw.nodes || []).map(normalizeNode);
   nextId = raw.nextId || 1;
   state.availableTags = raw.availableTags || [];
   state.filterTag = null;
@@ -581,7 +661,7 @@ async function createNewMap() {
 
   if (importData && importData.nodes && importData.nodes.length) {
     state.columns = importData.columns && importData.columns.length ? importData.columns : defaultColumns();
-    state.nodes = importData.nodes;
+    state.nodes = window.KicsModel.normalizeNodes(importData.nodes);
     nextId = importData.nextId || 1;
     rebuildChildren();
   } else {
@@ -591,7 +671,7 @@ async function createNewMap() {
   let { error } = await sb.from('maps').insert({
     owner_id: currentUser.id,
     title: state.boardTitle || 'Моя карта фич',
-    data: { columns: state.columns, nodes: state.nodes, nextId: nextId, availableTags: state.availableTags }
+    data: window.KicsModel.payload(state, nextId)
   });
 
   if (error) {
@@ -758,11 +838,11 @@ async function copyShare() {
   if (!link || !link.value) return;
   try {
     await navigator.clipboard.writeText(link.value);
-    alert('Ссылка скопирована');
+    showToast('Ссылка скопирована', 'success');
   } catch (e) {
     link.select();
     document.execCommand('copy');
-    alert('Ссылка скопирована');
+    showToast('Ссылка скопирована', 'success');
   }
 }
 
@@ -817,10 +897,16 @@ function renderTagFilterBar() {
     var add = document.createElement('span');
     add.className = 'filter-hash filter-add';
     add.textContent = '+ тег';
-    add.addEventListener('click', function () {
-      var name = prompt('Название тега:');
-      if (!name) return;
-      name = name.trim().toLowerCase();
+    add.addEventListener('click', async function () {
+      var name = await window.KicsUI.prompt({
+        title: 'Новый тег',
+        inputLabel: 'Название',
+        placeholder: 'Например: security',
+        confirmLabel: 'Добавить',
+        validate: function (value) { return value ? true : 'Введите название тега'; }
+      });
+      if (name === null) return;
+      name = name.toLowerCase();
       if (!name) return;
       if (!state.availableTags) state.availableTags = [];
       if (state.availableTags.indexOf(name) === -1) state.availableTags.push(name);
@@ -867,7 +953,7 @@ function renderColumns() {
             if (idx === 0) { n = createNode(null, 0, 'Новая карточка'); }
             else {
               var parents = getNodesByCol(idx - 1);
-              if (parents.length === 0) { alert('Сначала создай карточку в колонке «' + state.columns[idx - 1].name + '»'); return; }
+              if (parents.length === 0) { showToast('Сначала создайте карточку в колонке «' + state.columns[idx - 1].name + '»', 'error'); return; }
               var parent = parents[parents.length - 1];
               n = createNode(parent.id, idx, 'Новая карточка');
             }
@@ -899,8 +985,27 @@ function renderContent() {
 
   var roots = getNodesByCol(0).filter(function (n) { return !n.parentId; });
   if (roots.length === 0) {
-    var e = document.createElement('div'); e.className = 'empty-slot'; e.textContent = '\u2014';
-    cd.appendChild(e);
+    var empty = document.createElement('div');
+    empty.className = 'board-empty';
+    var panel = document.createElement('div');
+    panel.className = 'board-empty-card';
+    panel.innerHTML = '<div class="board-empty-icon">＋</div><div class="board-empty-title">Начните карту продукта</div><div class="board-empty-text">Создайте первую карточку, затем раскладывайте инициативы по уровням иерархии.</div>';
+    if (canEdit()) {
+      var create = document.createElement('button');
+      create.className = 'btn btn-primary';
+      create.textContent = 'Создать карточку';
+      create.addEventListener('click', function () {
+        var node = createNode(null, 0, 'Новая карточка');
+        state.nodes.push(node);
+        rebuildChildren();
+        scheduleSave();
+        render();
+        openModal(node.id);
+      });
+      panel.appendChild(create);
+    }
+    empty.appendChild(panel);
+    cd.appendChild(empty);
     return;
   }
   roots.forEach(function (n) { cd.appendChild(renderCardBlock(n, 0)); });
@@ -966,6 +1071,10 @@ function addComment(leafId) {
   if (!canEdit()) return;
   var leaf = getNodeById(leafId);
   if (!leaf) return;
+  if (!isLeaf(leaf)) {
+    showToast('Заметки доступны только для листовых карточек', 'error');
+    return;
+  }
   var existing = getCommentFor(leafId);
   if (existing) { openCommentEditor(existing.id); return; }
   var c = createNode(leaf.id, commentColIndex(), '', 'comment');
@@ -995,10 +1104,10 @@ function openCommentEditor(commentId) {
   var save = document.createElement('button'); save.className = 'btn btn-primary'; save.textContent = 'Сохранить';
   var cancel = document.createElement('button'); cancel.className = 'btn btn-secondary'; cancel.textContent = 'Отмена';
   cancel.addEventListener('click', function () { overlay.remove(); });
-  del.addEventListener('click', function () { state.nodes = state.nodes.filter(function (n) { return n.id !== c.id; }); overlay.remove(); scheduleSave(); render(); });
+  del.addEventListener('click', function () { c.note = ''; overlay.remove(); scheduleSave(); render(); });
   save.addEventListener('click', function () { c.note = ta.value.trim(); overlay.remove(); scheduleSave(); render(); });
   footer.appendChild(del);
-  var right = document.createElement('div'); right.style.cssText = 'display:flex;gap:8px;';
+  var right = document.createElement('div'); right.className = 'modal-footer-actions';
   right.appendChild(cancel); right.appendChild(save);
   footer.appendChild(right);
   modal.appendChild(body); modal.appendChild(footer);
@@ -1036,7 +1145,7 @@ function createCardElement(node) {
   // Действия карточки — одна кнопка-меню «⋮» справа сверху
   if (canEdit()) {
     var ac = document.createElement('div'); ac.className = 'card-actions';
-    var mb = document.createElement('button'); mb.className = 'card-action-btn card-menu-btn'; mb.textContent = '\u22ee'; mb.title = 'Действия';
+    var mb = document.createElement('button'); mb.className = 'card-action-btn card-menu-btn'; mb.textContent = '\u22ee'; mb.title = 'Действия'; mb.setAttribute('aria-label', 'Действия с карточкой «' + (node.title || 'Без названия') + '»');
     mb.addEventListener('click', function (e) {
       e.stopPropagation();
       openSelectMenu(mb, [
@@ -1093,9 +1202,20 @@ function createCardElement(node) {
         { value: 'Q2', label: 'Q2' },
         { value: 'Q3', label: 'Q3' },
         { value: 'Q4', label: 'Q4' }
-      ], function (val) {
+      ], async function (val) {
         if (!val) { node.dueDate = ''; }
-        else if (val.indexOf('Q') === 0) { var y = prompt('Год (например 2026):', new Date().getFullYear()); if (!y) return; node.dueDate = y + ' ' + val; }
+        else if (val.indexOf('Q') === 0) {
+          var y = await window.KicsUI.prompt({
+            title: 'Срок карточки',
+            inputLabel: 'Год для ' + val,
+            defaultValue: String(new Date().getFullYear()),
+            inputType: 'number',
+            confirmLabel: 'Сохранить',
+            validate: function (value) { return /^\d{4}$/.test(value) ? true : 'Введите год из четырёх цифр'; }
+          });
+          if (y === null) return;
+          node.dueDate = y + ' ' + val;
+        }
         else { node.dueDate = val; }
         scheduleSave(); updateCards(); syncHeights(); alignHeaders();
       });
@@ -1223,20 +1343,35 @@ function syncHeights() {
 function addChildNode(pn) {
   if (!canEdit()) return;
   var ni = pn.colIndex + 1;
-  if (ni >= state.columns.length) { alert('Сначала добавьте столбец справа'); return; }
-  var ch = createNode(pn.id, ni, 'Новая фича'); state.nodes.push(ch); pn.children.push(ch.id);
+  if (ni >= state.columns.length) { showToast('Сначала добавьте колонку справа', 'error'); return; }
+  var ch = createNode(pn.id, ni, 'Новая фича');
+  state.nodes.push(ch);
+  rebuildChildren();
   scheduleSave(); updateCards(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); }); openModal(ch.id);
 }
-function deleteNode(id) {
+async function deleteNode(id) {
   if (!canEdit()) return;
   var n = getNodeById(id); if (!n) return; var tr = new Set(); (function coll(x) { tr.add(x.id); getChildren(x.id).forEach(coll); })(n);
-  if (tr.size > 1 && !confirm('Удалить карточку и ' + (tr.size - 1) + ' дочерних?')) return;
+  var approved = await window.KicsUI.confirm({
+    title: 'Удалить карточку?',
+    message: tr.size > 1
+      ? 'Карточка и ' + (tr.size - 1) + ' дочерних элементов будут удалены.'
+      : 'Карточка будет удалена без возможности восстановления.',
+    confirmLabel: 'Удалить',
+    danger: true
+  });
+  if (!approved) return;
+  state.nodes.forEach(function (x) {
+    if (x.type === 'comment' && x.targetId && tr.has(x.targetId)) tr.add(x.id);
+  });
   state.nodes = state.nodes.filter(function (x) { return !tr.has(x.id); });
   state.nodes.forEach(function (x) { x.children = x.children.filter(function (cid) { return !tr.has(cid); }); });
+  invalidateModelIndex();
   pruneUnusedTags();
   renderTagFilterBar();
   scheduleSave(); updateCards(); requestAnimationFrame(function () { requestAnimationFrame(function () { syncHeights(); alignHeaders(); }); });
   if (isMindmapOpen()) renderMindmap(true);
+  showToast('Карточка удалена', 'success');
 }
 function saveModal() {
   var n = getNodeById(state.editingNodeId); if (!n) return;
@@ -1271,7 +1406,7 @@ function openCardView(id) {
 
   // Строка мета
   var meta = document.createElement('div');
-  meta.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;';
+  meta.className = 'card-view-meta';
   var st = document.createElement('span');
   st.className = 'status-badge ' + SC[n.status];
   st.innerHTML = '<span class="status-dot ' + SD[n.status] + '"></span>' + SL[n.status];
@@ -1287,7 +1422,7 @@ function openCardView(id) {
   // Теги
   if (n.tags && n.tags.length) {
     var tags = document.createElement('div');
-    tags.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;';
+    tags.className = 'card-view-tags';
     n.tags.forEach(function (t) {
       var chip = document.createElement('span');
       chip.className = 'card-tag';
@@ -1300,7 +1435,7 @@ function openCardView(id) {
   // Детали (с кликабельными ссылками)
   if (n.note) {
     var note = document.createElement('div');
-    note.style.cssText = 'color:var(--text);font-size:14px;line-height:1.6;';
+    note.className = 'card-view-note';
     // Преобразуем URL в кликабельные ссылки
     var html = eh(n.note).replace(/(https?:\/\/[^\s<>]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
     note.innerHTML = html;
@@ -1331,7 +1466,8 @@ function closeModal() { $('#modalOverlay').style.display = 'none'; state.editing
 
 function setupTagAutocomplete() {
   var input = document.getElementById('modalTags');
-  if (!input) return;
+  if (!input || input.dataset.autocompleteReady === 'true') return;
+  input.dataset.autocompleteReady = 'true';
   input.addEventListener('focus', function () { showTagAutocomplete(input); });
   input.addEventListener('input', function () { showTagAutocomplete(input); });
   input.addEventListener('blur', function () { setTimeout(function () { var d = document.getElementById('tagAutocomplete'); if (d) d.remove(); }, 200); });
@@ -1772,6 +1908,10 @@ function openMindmap() {
   if (!overlay) return;
   document.getElementById('mindmapTitle').textContent = state.boardTitle;
   overlay.style.display = 'flex';
+  var boardButton = document.getElementById('boardViewBtn');
+  var mindmapButton = document.getElementById('mindmapBtn');
+  if (boardButton) { boardButton.classList.remove('is-active'); boardButton.setAttribute('aria-pressed', 'false'); }
+  if (mindmapButton) { mindmapButton.classList.add('is-active'); mindmapButton.setAttribute('aria-pressed', 'true'); }
   mindmap.collapsed.clear();
   renderMindmap(false);
 }
@@ -1779,7 +1919,34 @@ function openMindmap() {
 function closeMindmap() {
   var overlay = document.getElementById('mindmapOverlay');
   if (overlay) overlay.style.display = 'none';
+  var boardButton = document.getElementById('boardViewBtn');
+  var mindmapButton = document.getElementById('mindmapBtn');
+  if (boardButton) { boardButton.classList.add('is-active'); boardButton.setAttribute('aria-pressed', 'true'); }
+  if (mindmapButton) { mindmapButton.classList.remove('is-active'); mindmapButton.setAttribute('aria-pressed', 'false'); }
   mindmap.dragging = null;
+}
+
+function handleGlobalEscape() {
+  if (document.querySelector('.dialog-overlay')) return;
+  var actionsMenu = document.getElementById('moreActionsMenu');
+  if (actionsMenu && !actionsMenu.hidden) {
+    actionsMenu.hidden = true;
+    var actionsButton = document.getElementById('moreActionsBtn');
+    if (actionsButton) actionsButton.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  if ($('#modalOverlay').style.display === 'flex') closeModal();
+  else if ($('#cardViewOverlay').style.display === 'flex') closeCardView();
+  else if ($('#shareOverlay').style.display === 'flex') $('#shareOverlay').style.display = 'none';
+  else if (isMindmapOpen()) closeMindmap();
+  else if (state.searchQuery) {
+    $('#searchInput').value = '';
+    state.searchQuery = '';
+    $('#clearSearch').style.display = 'none';
+    updateCards();
+    syncHeights();
+    alignHeaders();
+  }
 }
 
 // ──────────────────────────────────────
@@ -1798,6 +1965,8 @@ function initEvents() {
   // Mind map
   var mmBtn = document.getElementById('mindmapBtn');
   if (mmBtn) mmBtn.addEventListener('click', openMindmap);
+  var boardViewBtn = document.getElementById('boardViewBtn');
+  if (boardViewBtn) boardViewBtn.addEventListener('click', closeMindmap);
   var mmClose = document.getElementById('mindmapClose');
   if (mmClose) mmClose.addEventListener('click', closeMindmap);
   var mmZoomIn = document.getElementById('mindmapZoomIn');
@@ -1819,6 +1988,25 @@ function initEvents() {
       if (e.button !== 0 || e.target.closest('.mindmap-node')) return;
       mindmap.dragging = { x: e.clientX, y: e.clientY, tx: mindmap.tx, ty: mindmap.ty };
       mmCanvas.classList.add('is-panning');
+    });
+  }
+
+  // Compact actions menu
+  var moreButton = document.getElementById('moreActionsBtn');
+  var moreMenu = document.getElementById('moreActionsMenu');
+  function setActionsMenu(open) {
+    if (!moreButton || !moreMenu) return;
+    moreMenu.hidden = !open;
+    moreButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (moreButton && moreMenu) {
+    moreButton.addEventListener('click', function (event) {
+      event.stopPropagation();
+      setActionsMenu(moreMenu.hidden);
+    });
+    moreMenu.addEventListener('click', function () { setActionsMenu(false); });
+    document.addEventListener('click', function (event) {
+      if (!moreMenu.hidden && !moreMenu.contains(event.target) && event.target !== moreButton) setActionsMenu(false);
     });
   }
   window.addEventListener('mousemove', function (e) {
@@ -1856,14 +2044,22 @@ function initEvents() {
     viewMode = !viewMode;
     if (viewMode) { vtBtn.textContent = '✏️ Редактировать'; }
     else { vtBtn.textContent = '👁 Просмотр'; }
+    renderMapSelector();
     render();
+    showToast(viewMode ? 'Включён режим просмотра' : 'Включён режим редактирования', 'info');
+  });
+
+  var addColumnBtn = document.getElementById('addColumnBtn');
+  if (addColumnBtn) addColumnBtn.addEventListener('click', function () {
+    if (!canEdit()) return;
+    addColumn();
   });
 
   // Board title rename
   var bt = document.getElementById('boardTitle');
-  if (bt && canEdit()) {
+  if (bt) {
     bt.title = 'Нажми, чтобы переименовать доску';
-    bt.addEventListener('click', function () { bt.contentEditable = 'true'; bt.focus(); });
+    bt.addEventListener('click', function () { if (!canEdit()) return; bt.contentEditable = 'true'; bt.focus(); });
     bt.addEventListener('blur', function () {
       bt.contentEditable = 'false';
       var v = bt.textContent.trim();
@@ -1888,7 +2084,9 @@ function initEvents() {
   });
 
   // Search
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if ($('#modalOverlay').style.display === 'flex') closeModal(); else if ($('#cardViewOverlay').style.display === 'flex') closeCardView(); else if ($('#shareOverlay').style.display === 'flex') $('#shareOverlay').style.display = 'none'; else if (isMindmapOpen()) closeMindmap(); else if (state.searchQuery) { $('#searchInput').value = ''; state.searchQuery = ''; $('#clearSearch').style.display = 'none'; updateCards(); syncHeights(); alignHeaders(); } } });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') handleGlobalEscape();
+  });
   $('#searchInput').addEventListener('input', function () {
     var v = $('#searchInput').value.trim();
     $('#clearSearch').style.display = v ? 'block' : 'none';
@@ -1907,11 +2105,35 @@ function initEvents() {
   });
 
   // Export / import / demo
-  $('#exportBtn').addEventListener('click', function () { var d = JSON.stringify({ columns: state.columns, nodes: state.nodes, nextId: nextId }, null, 2); var b = new Blob([d], { type: 'application/json' }); var u = URL.createObjectURL(b); var a = document.createElement('a'); a.href = u; a.download = 'kics-feature-map-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); URL.revokeObjectURL(u); });
-  $('#importBtn').addEventListener('click', function () { if (!isOwner) { alert('У тебя режим просмотра — редактирование недоступно'); return; } $('#importFile').click(); });
+  $('#exportBtn').addEventListener('click', function () {
+    var data = JSON.stringify(window.KicsModel.payload(state, nextId), null, 2);
+    var blob = new Blob([data], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'kics-feature-map-' + new Date().toISOString().slice(0, 10) + '.json';
+    anchor.click();
+    URL.revokeObjectURL(url);
+    showToast('Экспорт подготовлен', 'success');
+  });
+  $('#importBtn').addEventListener('click', function () { if (!isOwner) { showToast('В режиме просмотра импорт недоступен', 'error'); return; } $('#importFile').click(); });
   $('#importFile').addEventListener('change', function (e) {
     var f = e.target.files[0]; if (!f) return; var r = new FileReader();
-    r.onload = function (ev) { try { var d = JSON.parse(ev.target.result); if (!d.columns || !d.nodes) throw new Error('bad'); state.columns = d.columns; state.nodes = d.nodes; nextId = d.nextId || 1; rebuildChildren(); scheduleSave(); render(); } catch (ex) { alert('Ошибка импорта'); } };
+    r.onload = function (ev) {
+      try {
+        var d = JSON.parse(ev.target.result);
+        if (!d.columns || !d.nodes) throw new Error('bad');
+        state.columns = d.columns;
+        state.nodes = d.nodes.map(normalizeNode);
+        nextId = d.nextId || 1;
+        rebuildChildren();
+        scheduleSave();
+        render();
+        showToast('Импорт завершён', 'success');
+      } catch (ex) {
+        showToast('Не удалось импортировать файл', 'error');
+      }
+    };
     r.readAsText(f); e.target.value = '';
   });
 
