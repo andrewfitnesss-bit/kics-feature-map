@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_feature_map';
 const LAST_MAP_KEY = 'kics_last_map_id';
-const APP_VERSION = 'v64';
+const APP_VERSION = 'v65';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -348,48 +348,72 @@ async function newMap() {
   showToast('Таблица создана', 'success');
 }
 
+var duplicateMapPending = false;
 async function duplicateMap() {
-  if (!canEdit()) {
+  if (duplicateMapPending) return;
+  if (!isOwner) {
     showToast('Дублировать таблицу может только владелец', 'error');
     return;
   }
   if (!sb || !currentUser || !state.mapId) return;
 
-  var sourceTitle = state.boardTitle || 'Моя карта фич';
-  var duplicateTitle = sourceTitle + ' (копия)';
-  var copyState = {
-    columns: JSON.parse(JSON.stringify(state.columns)),
-    nodes: JSON.parse(JSON.stringify(state.nodes)),
-    nextId: nextId,
-    availableTags: JSON.parse(JSON.stringify(state.availableTags || []))
-  };
+  duplicateMapPending = true;
+  var button = document.getElementById('duplicateMapBtn');
+  if (button) button.disabled = true;
+  try {
+    var sourceId = state.mapId;
+    var ownerId = currentUser.id;
+    var sourceTitle = state.boardTitle || 'Моя карта фич';
+    var duplicateTitle = sourceTitle + ' (копия)';
+    var suffix = 2;
+    while (state.maps.some(function (map) { return map.title === duplicateTitle; })) {
+      duplicateTitle = sourceTitle + ' (копия ' + suffix++ + ')';
+    }
+    var copyState = {
+      columns: JSON.parse(JSON.stringify(state.columns)),
+      nodes: JSON.parse(JSON.stringify(state.nodes)),
+      nextId: nextId,
+      availableTags: JSON.parse(JSON.stringify(state.availableTags || []))
+    };
 
-  var { error } = await sb.from('maps').insert({
-    owner_id: currentUser.id,
-    title: duplicateTitle,
-    data: copyState
-  });
-  if (error) {
+    var bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    var hex = Array.from(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    var id = hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+    var created = {
+      id: id,
+      owner_id: ownerId,
+      title: duplicateTitle,
+      data: copyState
+    };
+    var { error } = await sb.from('maps').insert(created);
+    if (error) {
+      showError('не удалось дублировать таблицу: ' + error.message);
+      return;
+    }
+
+    if (!currentUser || currentUser.id !== ownerId) return;
+    state.maps.unshift({ id: created.id, title: created.title, owner_id: created.owner_id, is_owner: true });
+    if (state.mapId === sourceId) {
+      // Flush the source's pending save before changing the active map.
+      clearTimeout(saveTimer);
+      await saveMapRemote();
+      if (state.mapId === sourceId && currentUser && currentUser.id === ownerId) {
+        applyMap(created, true);
+        try { localStorage.setItem(LAST_MAP_KEY, created.id); } catch (e) {}
+        render();
+      }
+    }
+    renderMapSelector();
+    showToast('Таблица продублирована', 'success');
+  } catch (error) {
     showError('не удалось дублировать таблицу: ' + error.message);
-    return;
+  } finally {
+    duplicateMapPending = false;
+    if (button) button.disabled = false;
   }
-
-  var { data: created, error: readErr } = await sb
-    .from('maps')
-    .select('id,title,owner_id')
-    .eq('owner_id', currentUser.id)
-    .eq('title', duplicateTitle)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (readErr || !created) {
-    showError('таблица продублирована, но не удалось открыть её — обнови страницу');
-    return;
-  }
-
-  state.maps.unshift({ id: created.id, title: created.title, owner_id: created.owner_id, is_owner: true });
-  await loadMap(created.id);
-  showToast('Таблица продублирована', 'success');
 }
 
 async function deleteMap() {
@@ -668,7 +692,7 @@ function renderMapSelector() {
   var addColumnButton = document.getElementById('addColumnBtn');
   if (addColumnButton) addColumnButton.style.display = canEdit() ? 'flex' : 'none';
   var duplicateButton = document.getElementById('duplicateMapBtn');
-  if (duplicateButton) duplicateButton.style.display = canEdit() ? 'flex' : 'none';
+  if (duplicateButton) duplicateButton.style.display = isOwner ? 'flex' : 'none';
   var importButton = document.getElementById('importBtn');
   if (importButton) importButton.style.display = isOwner ? 'flex' : 'none';
 }
