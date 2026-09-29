@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v74';
+const APP_VERSION = 'v75';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1263,7 +1263,10 @@ function createCardElement(node) {
       ];
       // Свернуть/развернуть — только если у карточки есть дочерние (актуально для ветки)
       if (hasChildren) items.push(isCollapsed ? { value: 'expand', label: 'Развернуть' } : { value: 'collapse', label: 'Свернуть' });
-      if (window.KicsAI) items.push({ value: 'ai', label: 'ИИ…' });
+      if (window.KicsAI) {
+        items.push({ value: 'ai-desc', label: 'Описание AI' });
+        items.push({ value: 'ai', label: 'ИИ…' });
+      }
       items.push(
         { value: 'note', label: 'Заметка' },
         { value: 'delete', label: 'Удалить' }
@@ -1273,6 +1276,7 @@ function createCardElement(node) {
         else if (val === 'edit') openModal(node.id);
         else if (val === 'collapse') { collapsedBranches.add(node.id); render(); }
         else if (val === 'expand') { collapsedBranches.delete(node.id); render(); }
+        else if (val === 'ai-desc') window.KicsAI.openPanel('card', node.id, 'ai-description');
         else if (val === 'ai') window.KicsAI.openPanel('card', node.id);
         else if (val === 'note') openNoteEditor(node.id);
         else if (val === 'delete') deleteNode(node.id);

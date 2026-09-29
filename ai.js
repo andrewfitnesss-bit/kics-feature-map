@@ -57,6 +57,18 @@
 
   var settings = loadSettings();
 
+  // Контекст документации (загружается через «Проанализировать документацию»).
+  var LS_DOC = 'kics_ai_doc_v1';
+  var docContext = null;
+  try { var rawDoc = localStorage.getItem(LS_DOC); if (rawDoc) docContext = JSON.parse(rawDoc) || null; } catch (e) {}
+  function saveDocContext(doc) {
+    docContext = doc;
+    try {
+      var trimmed = { url: doc.url, title: doc.title, text: String(doc.text || '').slice(0, 60000) };
+      localStorage.setItem(LS_DOC, JSON.stringify(trimmed));
+    } catch (e) {}
+  }
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -192,6 +204,22 @@
   function registerAction(a) { actions.push(a); byActionId[a.id] = a; }
 
   registerAction({
+    id: 'analyze-docs',
+    label: 'Проанализировать документацию',
+    scope: 'board',
+    needsUrl: true,
+    onFetched: function (inputs) {
+      saveDocContext({ url: inputs.url, title: inputs.title, text: inputs.text });
+    },
+    buildPrompt: function (ctx, inputs) {
+      return [
+        { role: 'system', content: 'Ты — аналитик продуктовой документации. Отвечай на русском.' },
+        { role: 'user', content: 'Текст документации:\n---\n' + inputs.text.slice(0, 40000) + '\n---\n\nСделай краткое резюме: что это за продукт, ключевые возможности, ограничения. 5–10 пунктов.' }
+      ];
+    }
+  });
+
+  registerAction({
     id: 'fill-description',
     label: 'Заполнить Описание по ссылке',
     scope: 'card',
@@ -199,7 +227,29 @@
     buildPrompt: function (ctx, inputs) {
       return [
         { role: 'system', content: 'Ты — продуктовый аналитик. Пиши кратко и по делу, на русском языке.' },
-        { role: 'user', content: 'Текст по ссылке:\n---\n' + inputs.text + '\n---\n\nКарточка фичи:\n' + ctx.card + '\n\nНапиши краткое описание этой фичи (2–4 предложения) на основе приведённого текста. Верни только текст описания, без заголовков и пояснений.' }
+        { role: 'user', content: 'Текст по ссылке:\n---\n' + inputs.text + '\n---\n\nКарточка фичи:\n' + ctx.card + '\n\nНапиши описание этой фичи объёмом 2–3 коротких абзаца на основе приведённого текста. Верни только текст описания, без заголовков и пояснений.' }
+      ];
+    },
+    apply: function (result, ctx) {
+      var n = getNodeById(ctx.nodeId);
+      if (!n) return;
+      n.note = result.trim();
+      var ta = document.getElementById('modalNote');
+      if (ta) ta.value = n.note;
+      scheduleSave(); render();
+    }
+  });
+
+  registerAction({
+    id: 'ai-description',
+    label: 'Описание AI',
+    scope: 'card',
+    needsUrl: false,
+    buildPrompt: function (ctx) {
+      var docPart = docContext ? ('\n\nКонтекст из документации:\n---\n' + String(docContext.text || '').slice(0, 20000) + '\n---') : '';
+      return [
+        { role: 'system', content: 'Ты — продуктовый аналитик. Пиши лаконично, на русском.' },
+        { role: 'user', content: 'Карточка фичи:\n' + ctx.card + docPart + '\n\nНапиши описание этой фичи объёмом 2–3 коротких абзаца. Опиши суть и ценность, без воды. Верни только текст описания.' }
       ];
     },
     apply: function (result, ctx) {
@@ -251,6 +301,102 @@
     }
   });
 
+  // ── Вспомогательные функции для генерации/очистки описаний ──
+  function extractJSON(text) {
+    if (!text) return null;
+    var s = String(text).trim().replace(/```(?:json)?/gi, '');
+    var start = s.indexOf('{');
+    var end = s.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) return null;
+    try { return JSON.parse(s.slice(start, end + 1)); } catch (e) { return null; }
+  }
+
+  function emptyDescriptionCards() {
+    return state.nodes.filter(function (n) { return n.type !== 'comment' && !(n.note || '').trim(); });
+  }
+
+  function buildDescriptionsPrompt(list, chunk) {
+    var docPart = docContext ? ('\n\nКонтекст из документации:\n---\n' + String(docContext.text || '').slice(0, 20000) + '\n---') : '';
+    return [
+      { role: 'system', content: 'Ты — продуктовый аналитик. Отвечай СТРОГО JSON-объектом, без markdown и пояснений.' },
+      { role: 'user', content: 'Напиши описание для каждой фичи ниже. Каждое описание — 2–3 коротких абзаца, лаконично.' + docPart + '\n\nФичи:\n' + list + '\n\nВерни СТРОГО JSON-объект вида {"1":"описание","2":"описание",...}, где ключ — порядковый номер фичи. Больше ничего не пиши.' }
+    ];
+  }
+
+  function openGenerateDescriptions() {
+    if (typeof canEdit === 'function' && !canEdit()) { showToast('Переключитесь в режим редактирования', 'error'); return; }
+    var body = overlayShell('Создать Описания');
+    var cards = emptyDescriptionCards();
+
+    var info = document.createElement('p'); info.className = 'ai-hint';
+    info.textContent = 'Заполняются только пустые описания (текст пользователя не перезаписывается). Карточек без описания: ' + cards.length + (docContext ? '. Документация загружена.' : '. Документация не загружена — описания напишутся по названию карточки.');
+    body.appendChild(info);
+
+    var out = document.createElement('div'); out.className = 'ai-output';
+    out.textContent = 'Нажмите «Создать описания».';
+    body.appendChild(out);
+
+    var row = document.createElement('div'); row.className = 'ai-actions';
+    var run = document.createElement('button'); run.type = 'button'; run.className = 'btn btn-primary'; run.textContent = 'Создать описания';
+    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn btn-secondary'; cancel.textContent = 'Закрыть';
+    row.appendChild(run); row.appendChild(cancel);
+    body.appendChild(row);
+    cancel.addEventListener('click', closePanel);
+
+    run.addEventListener('click', async function () {
+      if (!cards.length) { out.textContent = 'Все описания уже заполнены.'; return; }
+      run.disabled = true;
+      var filled = 0;
+      try {
+        var batch = 8;
+        for (var i = 0; i < cards.length; i += batch) {
+          var chunk = cards.slice(i, i + batch);
+          var stillEmpty = chunk.filter(function (c) { return !(c.note || '').trim(); });
+          if (!stillEmpty.length) continue;
+          run.textContent = '⏳ ' + (i + 1) + '–' + Math.min(i + chunk.length, cards.length) + ' из ' + cards.length + '…';
+          var list = stillEmpty.map(function (c, idx) { return (idx + 1) + '. ' + nodeToText(c); }).join('\n');
+          var raw = await complete(buildDescriptionsPrompt(list, stillEmpty), { maxTokens: 3000 });
+          var parsed = extractJSON(raw);
+          if (!parsed) throw new Error('Модель вернула некорректный JSON. Повторите попытку.');
+          stillEmpty.forEach(function (c, idx) {
+            var desc = parsed[String(idx + 1)];
+            if (typeof desc === 'string' && desc.trim() && !(c.note || '').trim()) {
+              c.note = desc.trim(); filled++;
+            }
+          });
+        }
+        scheduleSave(); render();
+        out.textContent = 'Готово. Заполнено описаний: ' + filled + '.';
+        run.textContent = 'Готово';
+        showToast('Описания созданы: ' + filled, 'success');
+      } catch (e) {
+        if (filled) { scheduleSave(); render(); }
+        out.textContent = 'Ошибка: ' + (e && e.message ? e.message : e) + (filled ? '\n\nЗаполнено до ошибки: ' + filled : '');
+        showToast(e && e.message ? e.message : 'Ошибка', 'error');
+      } finally {
+        run.disabled = false;
+      }
+    });
+  }
+
+  function clearAllDescriptions() {
+    if (typeof canEdit === 'function' && !canEdit()) { showToast('Переключитесь в режим редактирования', 'error'); return; }
+    var count = state.nodes.filter(function (n) { return n.type !== 'comment' && (n.note || '').trim(); }).length;
+    window.KicsUI.confirm({
+      title: 'Очистить все описания?',
+      message: 'Будут очищены описания в ' + count + ' карточках. Действие необратимо (откатить можно через «↶ Отменить»).',
+      confirmLabel: 'Очистить',
+      cancelLabel: 'Отмена',
+      danger: true
+    }).then(function (ok) {
+      if (!ok) return;
+      if (typeof rememberDeletion === 'function') rememberDeletion('Clear descriptions');
+      state.nodes.forEach(function (n) { if (n.type !== 'comment') n.note = ''; });
+      scheduleSave(); render();
+      showToast('Все описания очищены', 'success');
+    });
+  }
+
   // ── UI: панель и меню ──
   var panelOverlay = null;
   function closePanel() { if (panelOverlay) { panelOverlay.remove(); panelOverlay = null; } }
@@ -294,6 +440,20 @@
       b.addEventListener('click', function () { runView(a, scope, nodeId, body); });
       body.appendChild(b);
     });
+
+    if (scope === 'board') {
+      var gd = document.createElement('button');
+      gd.type = 'button'; gd.className = 'ai-action-btn';
+      gd.textContent = 'Создать Описания';
+      gd.addEventListener('click', function () { openGenerateDescriptions(); });
+      body.appendChild(gd);
+
+      var clr = document.createElement('button');
+      clr.type = 'button'; clr.className = 'ai-action-btn ai-action-danger';
+      clr.textContent = 'Очистить все описания';
+      clr.addEventListener('click', function () { closePanel(); clearAllDescriptions(); });
+      body.appendChild(clr);
+    }
 
     var s = document.createElement('button');
     s.type = 'button'; s.className = 'btn btn-secondary ai-settings-btn';
@@ -356,6 +516,7 @@
           inputs.text = page.text ? String(page.text).slice(0, 40000) : '';
           inputs.title = page.title || '';
           if (!inputs.text) throw new Error('Не удалось извлечь текст со страницы');
+          if (action.onFetched) action.onFetched(inputs, { nodeId: nodeId });
         }
         run.textContent = '⏳ Генерирую…';
         var ctx = { nodeId: nodeId, card: nodeId ? nodeToText(getNodeById(nodeId)) : '', board: boardText() };
@@ -512,6 +673,8 @@
     openCardMenu: openCardMenu,
     openSettings: openSettings,
     fillDescriptionFromUrl: fillDescriptionFromUrl,
+    clearAllDescriptions: clearAllDescriptions,
+    openGenerateDescriptions: openGenerateDescriptions,
     registerAction: registerAction,
     complete: complete,
     fetchUrl: fetchUrl
