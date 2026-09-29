@@ -27,11 +27,10 @@ function json(data, status = 200) {
   });
 }
 
-async function callOpenAI(baseURL, key, model, messages, maxTokens, provider) {
+async function callOpenAI(baseURL, key, model, messages, maxTokens, provider, thinking) {
   const body = { model, messages, stream: false, temperature: 0.4, max_tokens: maxTokens || 2048 };
-  // Для DeepSeek отключаем режим «размышлений», чтобы модель сразу отвечала,
-  // а не тратила лимит токенов на внутренние рассуждения (пустой content).
-  if (provider === "deepseek") body.thinking = { type: "disabled" };
+  // DeepSeek: включаем «размышления» только при явном запросе ризонинга.
+  if (provider === "deepseek") body.thinking = { type: thinking ? "enabled" : "disabled" };
 
   const resp = await fetch(baseURL.replace(/\/+$/, "") + "/chat/completions", {
     method: "POST",
@@ -123,7 +122,7 @@ Deno.serve(async (req) => {
   try {
     const content = cfg.kind === "anthropic"
       ? await callAnthropic(baseURL, apiKey, body.model, messages, body.maxTokens)
-      : await callOpenAI(baseURL, apiKey, body.model, messages, body.maxTokens, provider);
+      : await callOpenAI(baseURL, apiKey, body.model, messages, body.maxTokens, provider, !!body.thinking);
     return json({ content });
   } catch (e) {
     return json({ error: e.message || String(e) }, 502);

@@ -13,7 +13,16 @@
     custom:     { id: 'custom',     label: 'Свой (OpenAI-совместимый)', baseURL: '', defaultModel: '', needsKey: true }
   };
 
-  var DEFAULTS = { provider: 'openai', model: '', baseURL: '', apiKey: '', useProxy: false };
+  var DEFAULTS = { provider: 'openai', model: '', baseURL: '', apiKey: '', useProxy: false, reasoning: false, webSearch: false, openRouterKey: '', searchModel: 'openai/gpt-4o-mini:online' };
+
+  // Модели для «ризонинга» (рассуждений) по провайдеру.
+  var REASONING_MODELS = {
+    openai: 'o3-mini',
+    anthropic: 'claude-3-7-sonnet-latest',
+    deepseek: 'deepseek-v4-pro',
+    openrouter: 'deepseek/deepseek-r1',
+    custom: ''
+  };
 
   // Карта «дефолтная модель → провайдер» — чтобы ловить устаревшую модель
   // при смене провайдера (например, сохранённый gpt-4o-mini при выборе DeepSeek).
@@ -83,6 +92,8 @@
   async function complete(messages, opts) {
     opts = opts || {};
     try {
+      if (settings.webSearch) return await completeWebSearch(messages, opts);
+      if (settings.reasoning) return await completeReasoning(messages, opts);
       if (settings.useProxy) return await completeProxy(messages, opts);
       if (!settings.apiKey) throw new Error('Укажите API-ключ в настройках ИИ');
       return await completeDirect(messages, opts);
@@ -94,10 +105,41 @@
     }
   }
 
+  // Веб-поиск через OpenRouter (модель с суффиксом :online).
+  async function completeWebSearch(messages, opts) {
+    var model = String(settings.searchModel || 'openai/gpt-4o-mini:online');
+    if (model.indexOf(':online') === -1) model += ':online';
+    var key = settings.openRouterKey;
+    if (!key) throw new Error('Для веб-поиска укажите API-ключ OpenRouter в настройках ИИ');
+    var resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({ model: model, messages: messages, stream: false, temperature: 0.3, max_tokens: opts.maxTokens || 4096 })
+    });
+    if (!resp.ok) throw new Error('OpenRouter: ' + await resp.text());
+    var data = await resp.json();
+    var content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!content) throw new Error('Пустой ответ модели');
+    return content;
+  }
+
+  // Ризонинг (рассуждения) — модель-резонер текущего провайдера.
+  async function completeReasoning(messages, opts) {
+    var model = REASONING_MODELS[settings.provider] || (settings.model || (PROVIDERS[settings.provider] || PROVIDERS.openai).defaultModel);
+    var newOpts = Object.assign({}, opts, {
+      model: model,
+      maxTokens: opts.maxTokens || 8192,
+      thinking: settings.provider === 'deepseek'
+    });
+    if (settings.useProxy) return await completeProxy(messages, newOpts);
+    if (!settings.apiKey) throw new Error('Укажите API-ключ в настройках ИИ');
+    return await completeDirect(messages, newOpts);
+  }
+
   async function completeDirect(messages, opts) {
     var p = PROVIDERS[settings.provider] || PROVIDERS.openai;
     var base = String(settings.baseURL || p.baseURL || '').replace(/\/+$/, '');
-    var model = settings.model || p.defaultModel;
+    var model = opts.model || settings.model || p.defaultModel;
     if (!base) throw new Error('Укажите Base URL провайдера в настройках');
 
     if (settings.provider === 'anthropic') {
@@ -120,6 +162,7 @@
 
     var body = { model: model, messages: messages, stream: false, temperature: opts.temperature != null ? opts.temperature : 0.4 };
     if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+    if (opts.thinking && settings.provider === 'deepseek') body.thinking = { type: 'enabled' };
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + settings.apiKey },
@@ -127,7 +170,9 @@
     });
     if (!resp.ok) throw new Error('LLM: ' + await resp.text());
     var data = await resp.json();
-    var content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    var msg = data.choices && data.choices[0] && data.choices[0].message;
+    var content = msg && msg.content;
+    if (!content && msg && msg.reasoning_content) content = msg.reasoning_content;
     if (!content) throw new Error('Пустой ответ модели');
     return content;
   }
@@ -144,7 +189,7 @@
     var resp = await fetch(fnURL('ai-proxy'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ provider: settings.provider, model: settings.model, baseURL: settings.baseURL, messages: messages, maxTokens: opts.maxTokens || 2048 })
+      body: JSON.stringify({ provider: settings.provider, model: opts.model || settings.model, baseURL: settings.baseURL, messages: messages, maxTokens: opts.maxTokens || 2048, thinking: !!opts.thinking })
     });
     if (!resp.ok) throw new Error('Прокси: ' + await resp.text());
     var data = await resp.json();
@@ -593,13 +638,29 @@
       base.value = p.baseURL || '';
     });
 
+    var reasoningWrap = document.createElement('label'); reasoningWrap.className = 'ai-check';
+    var reasoning = document.createElement('input'); reasoning.type = 'checkbox'; reasoning.checked = !!settings.reasoning;
+    var reasoningTxt = document.createElement('span'); reasoningTxt.textContent = ' Ризонинг (модель-резонер — точнее, но дольше)';
+    reasoningWrap.appendChild(reasoning); reasoningWrap.appendChild(reasoningTxt);
+
+    var webWrap = document.createElement('label'); webWrap.className = 'ai-check';
+    var web = document.createElement('input'); web.type = 'checkbox'; web.checked = !!settings.webSearch;
+    var webTxt = document.createElement('span'); webTxt.textContent = ' Веб-поиск (OpenRouter :online)';
+    webWrap.appendChild(web); webWrap.appendChild(webTxt);
+
+    var orKeyLbl = document.createElement('label'); orKeyLbl.className = 'ai-label'; orKeyLbl.textContent = 'Ключ OpenRouter (для веб-поиска)';
+    var orKey = document.createElement('input'); orKey.type = 'password'; orKey.className = 'modal-input'; orKey.placeholder = 'sk-or-v1-…'; orKey.value = settings.openRouterKey;
+
+    var smLbl = document.createElement('label'); smLbl.className = 'ai-label'; smLbl.textContent = 'Модель веб-поиска';
+    var sm = document.createElement('input'); sm.type = 'text'; sm.className = 'modal-input'; sm.placeholder = 'openai/gpt-4o-mini:online'; sm.value = settings.searchModel;
+
     var proxyWrap = document.createElement('label'); proxyWrap.className = 'ai-check';
     var proxy = document.createElement('input'); proxy.type = 'checkbox'; proxy.checked = !!settings.useProxy;
     var proxyTxt = document.createElement('span'); proxyTxt.textContent = ' Выполнять через сервер-прокси (ключ на сервере)';
     proxyWrap.appendChild(proxy); proxyWrap.appendChild(proxyTxt);
 
     var hint = document.createElement('p'); hint.className = 'ai-hint';
-    hint.textContent = 'OpenAI и DeepSeek блокируют прямые запросы из браузера (CORS) — для них включите прокси. OpenRouter и Anthropic работают напрямую.';
+    hint.textContent = 'OpenAI и DeepSeek блокируют прямые запросы из браузера (CORS) — для них включите прокси. OpenRouter работает напрямую. Веб-поиск идёт через OpenRouter (:online), ему нужен отдельный ключ.';
 
     var row = document.createElement('div'); row.className = 'ai-actions';
     var save = document.createElement('button'); save.type = 'button'; save.className = 'btn btn-primary'; save.textContent = 'Сохранить';
@@ -611,6 +672,10 @@
     body.appendChild(keyLbl); body.appendChild(key);
     body.appendChild(baseLbl); body.appendChild(base);
     body.appendChild(modelLbl); body.appendChild(model);
+    body.appendChild(reasoningWrap);
+    body.appendChild(webWrap);
+    body.appendChild(orKeyLbl); body.appendChild(orKey);
+    body.appendChild(smLbl); body.appendChild(sm);
     body.appendChild(proxyWrap);
     body.appendChild(hint);
     body.appendChild(row);
@@ -622,6 +687,10 @@
       settings.baseURL = base.value.trim();
       settings.model = model.value.trim();
       settings.useProxy = proxy.checked;
+      settings.reasoning = reasoning.checked;
+      settings.webSearch = web.checked;
+      settings.openRouterKey = orKey.value.trim();
+      settings.searchModel = sm.value.trim() || 'openai/gpt-4o-mini:online';
       saveSettings(settings);
       if (settings.useProxy && settings.apiKey) {
         var ok = await persistServerCredential();
@@ -636,10 +705,12 @@
       var prev = Object.assign({}, settings);
       settings.provider = sel.value; settings.apiKey = key.value.trim();
       settings.baseURL = base.value.trim(); settings.model = model.value.trim(); settings.useProxy = proxy.checked;
+      settings.reasoning = reasoning.checked; settings.webSearch = web.checked;
+      settings.openRouterKey = orKey.value.trim(); settings.searchModel = sm.value.trim() || 'openai/gpt-4o-mini:online';
       saveSettings(settings);
       if (settings.useProxy && settings.apiKey) await persistServerCredential();
       try {
-        var r = await complete([{ role: 'user', content: 'Ответь одним словом: ОК' }], { maxTokens: 512 });
+        var r = await complete([{ role: 'user', content: 'Ответь одним словом: ОК' }], { maxTokens: 8192 });
         showToast('Подключение работает: ' + r.slice(0, 60), 'success');
       } catch (e) {
         showToast('Ошибка: ' + (e && e.message ? e.message : e), 'error');
