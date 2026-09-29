@@ -27,6 +27,7 @@ test('search + reasoning respects proxy', async () => {
   assert.equal(s.calls[0].body.provider, 'openrouter');
   assert.equal(s.calls[0].body.reasoning, true);
   assert.equal(s.calls[0].body.webSearch, true);
+  assert.equal(s.calls[0].body.maxTokens, 4096);
   assert(!s.calls[0].body.model.includes(':online'));
 });
 test('direct search includes reasoning', async () => {
@@ -48,6 +49,7 @@ test('documentation search precedes selected model and restricts domain', async 
   assert.equal(s.calls.length, 2);
   assert.equal(s.calls[0].body.provider, 'openrouter');
   assert.deepEqual(s.calls[0].body.searchDomains, ['support.kaspersky.com']);
+  assert.equal(s.calls[0].body.maxTokens, 3072);
   assert.equal(s.calls[1].body.provider, 'deepseek');
   assert(s.calls[1].body.messages.some(m => m.content.includes('Найденные сведения')));
 });
