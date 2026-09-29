@@ -6,6 +6,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { safeFetch, limitedText } from '../_shared/safe-fetch.ts';
+import { parseCompletion } from '../_shared/completion.mjs';
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -44,13 +45,7 @@ async function callOpenAI(baseURL, key, model, messages, maxTokens, provider, th
   });
   if (!resp.ok) throw new Error("LLM: " + (await resp.text()));
   const data = JSON.parse(await limitedText(resp));
-  const choice = data.choices?.[0];
-  let content = choice?.message?.content;
-  if (!content) {
-    throw new Error("Пустой ответ модели (finish_reason: " + (choice?.finish_reason || "?") + ")");
-  }
-  if (choice?.finish_reason === 'length') throw new Error('Ответ обрезан лимитом токенов. Уменьшите объём задания.');
-  return { content, annotations: choice?.message?.annotations || [] };
+  return parseCompletion(data, provider, model);
 }
 
 async function callAnthropic(baseURL, key, model, messages, maxTokens, thinking) {

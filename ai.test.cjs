@@ -18,7 +18,7 @@ function setup(options, doc, annotations = []) {
     } }
   };
   vm.createContext(context); vm.runInContext(source, context);
-  return { api: context.window.KicsAI, calls, stored };
+  return { api: context.window.KicsAI, calls, stored, context };
 }
 test('search + reasoning respects proxy', async () => {
   const s = setup({ provider: 'deepseek', webSearch: true, reasoning: true, useProxy: true });
@@ -29,6 +29,7 @@ test('search + reasoning respects proxy', async () => {
   assert.equal(s.calls[0].body.webSearch, true);
   assert.equal(s.calls[0].body.maxTokens, 4096);
   assert(!s.calls[0].body.model.includes(':online'));
+  assert.equal(s.calls[0].body.model, 'openai/gpt-4o-mini');
 });
 test('direct search includes reasoning', async () => {
   const s = setup({ webSearch: true, reasoning: true, openRouterKey: 'dummy' });
@@ -38,6 +39,23 @@ test('direct search includes reasoning', async () => {
 test('plaintext keys are not persisted', () => {
   const s = setup({ apiKey: 'secret-a', openRouterKey: 'secret-b' });
   assert(!s.stored.kics_ai_settings_v1.includes('secret-'));
+});
+test('in-flight credit error is explained and never retried automatically', async () => {
+  const s = setup({ provider: 'deepseek', useProxy: true });
+  let requests = 0;
+  s.context.window.fetch = async () => { requests++; return { ok: false, text: async () => JSON.stringify({ error: 'This request would exceed your available credits given your current in-flight requests.' }) }; };
+  await assert.rejects(s.api.complete([]), /уже выполняющихся/);
+  await assert.rejects(s.api.complete([]), /пауза на 60 секунд/);
+  assert.equal(requests, 1);
+});
+test('simultaneous completions are rejected within a tab', async () => {
+  const s = setup({ provider: 'deepseek', useProxy: true });
+  let release;
+  s.context.window.fetch = () => new Promise(resolve => { release = () => resolve({ ok: true, json: async () => ({ content: 'OK' }) }); });
+  const first = s.api.complete([]);
+  await assert.rejects(s.api.complete([]), /уже выполняется/);
+  release();
+  await first;
 });
 test('legacy migration never updates existing maps', () => {
   const sql = fs.readFileSync(path.join(__dirname, 'migrate_legacy.sql'), 'utf8');
@@ -57,4 +75,12 @@ test('documentation search without citations fails closed', async () => {
   const s = setup({ provider: 'deepseek', useProxy: true }, { url: 'https://support.kaspersky.com/business' });
   await assert.rejects(s.api.complete([], { docQuery: 'Device control' }), /подтверждённых ссылок/);
   assert.equal(s.calls.length, 1);
+});
+test('completion parser accepts text blocks but never reasoning as an answer', async () => {
+  const { parseCompletion } = await import('./supabase/functions/_shared/completion.mjs');
+  const value = parseCompletion({ choices: [{ finish_reason: 'stop', message: { content: [{ type: 'text', text: 'Answer' }] } }] }, 'test', 'test');
+  assert.equal(value.content, 'Answer');
+  assert.throws(() => parseCompletion({ choices: [{ finish_reason: 'stop', message: { content: '', reasoning_content: 'PRIVATE_REASONING' } }] }, 'test', 'test'), e => e.message.includes('hasReasoning') && !e.message.includes('PRIVATE_REASONING'));
+  assert.throws(() => parseCompletion({ choices: [{ finish_reason: 'length', message: { content: 'partial' } }] }, 'test', 'test'), /обрезан/);
+  assert.throws(() => parseCompletion({ choices: [{ finish_reason: 'stop', message: { content: ' ', tool_calls: [{}] } }] }, 'test', 'test'), /инструмента/);
 });
