@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v83';
+const APP_VERSION = 'v84';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -2019,7 +2019,6 @@ function openMindmap() {
   var mindmapButton = document.getElementById('mindmapBtn');
   if (boardButton) { boardButton.classList.remove('is-active'); boardButton.setAttribute('aria-pressed', 'false'); }
   if (mindmapButton) { mindmapButton.classList.add('is-active'); mindmapButton.setAttribute('aria-pressed', 'true'); }
-  mindmap.collapsed.clear();
   renderMindmap(false);
 }
 

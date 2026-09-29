@@ -1,3 +1,31 @@
+# Майндкарта v84
+
+Новый редактор использует те же карточки, что и таблица. Доступны стабильная
+раскладка вправо/в обе стороны, плотность, поиск по названию/описанию/тегам,
+фильтр статуса, фокус на ветке, раскрытие до уровня, миникарта и SVG-экспорт
+видимой структуры. Камера, раскладка и свёрнутые ветки сохраняются локально
+отдельно для аккаунта и таблицы.
+
+Клик выбирает карточку, Shift+клик — несколько. Правая панель показывает
+описание, заметку и сводку ветки. F2 переименовывает, Tab создаёт дочернюю,
+Enter — соседнюю карточку, стрелки перемещают выбор (когда фокус на холсте).
+Перетаскивание на карточку меняет родителя после подтверждения. Недопустимые
+циклы и выход за колонки запрещены. Для нового уровня сначала добавьте колонку
+на доске. Статус и горизонт можно менять сразу у выбранных карточек.
+
+Отмена/повтор относятся к операциям редактора карты, максимум 30 шагов за
+сеанс; при внешнем изменении данных история сбрасывается во избежание потерь.
+AI может заполнить только пустые описания выбранной ветки; анализ пробелов и
+дублей доступен через «ИИ для карточки» и ничего не применяет автоматически.
+
+Проверки: `node --test mindmap.test.cjs ai.test.cjs` и
+`node mindmap.browser-test.cjs` (Chrome; путь можно задать через CHROME_PATH).
+Браузерный тест изолирован от Supabase и платных API.
+
+Ограничения: нет виртуализации, произвольных поперечных связей и совместного
+редактирования в реальном времени. SVG экспортирует видимые названия и линии,
+а не полное содержимое описаний. Поиск карты независим от фильтров доски.
+
 # v78: targeted documentation search
 
 In AI → Analyze documentation, enter the documentation URL and product/version. The URL selects a search domain, not a five-page crawl. Before each action, OpenRouter searches that domain for evidence; the selected generation model receives that evidence. Bulk descriptions search separately for each empty card. An OpenRouter key is required even when general web search is disabled (store it using proxy settings). No citations means the action stops rather than silently inventing documentation. This uses external indexed search, not Kaspersky's internal search API; completeness and immediate indexing are not guaranteed. Up to eight relevant results per search are budgeted, not the first eight links in the documentation. Redeploy ai-proxy and publish frontend v78; no new SQL migration beyond v77.
