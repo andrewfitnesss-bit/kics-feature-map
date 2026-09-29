@@ -8,7 +8,7 @@
   var PROVIDERS = {
     openai:     { id: 'openai',     label: 'OpenAI',     baseURL: 'https://api.openai.com/v1',    defaultModel: 'gpt-4o-mini', needsKey: true },
     anthropic:  { id: 'anthropic',  label: 'Anthropic',  baseURL: 'https://api.anthropic.com/v1', defaultModel: 'claude-3-5-sonnet-latest', needsKey: true },
-    deepseek:   { id: 'deepseek',   label: 'DeepSeek',   baseURL: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat', needsKey: true },
+    deepseek:   { id: 'deepseek',   label: 'DeepSeek',   baseURL: 'https://api.deepseek.com', defaultModel: 'deepseek-flash', needsKey: true },
     openrouter: { id: 'openrouter', label: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1', defaultModel: 'openai/gpt-4o-mini', needsKey: true },
     custom:     { id: 'custom',     label: 'Свой (OpenAI-совместимый)', baseURL: '', defaultModel: '', needsKey: true }
   };
@@ -58,9 +58,16 @@
 
   async function complete(messages, opts) {
     opts = opts || {};
-    if (settings.useProxy) return await completeProxy(messages, opts);
-    if (!settings.apiKey) throw new Error('Укажите API-ключ в настройках ИИ');
-    return await completeDirect(messages, opts);
+    try {
+      if (settings.useProxy) return await completeProxy(messages, opts);
+      if (!settings.apiKey) throw new Error('Укажите API-ключ в настройках ИИ');
+      return await completeDirect(messages, opts);
+    } catch (e) {
+      if (e instanceof TypeError && /Failed to fetch/i.test(e.message || '')) {
+        throw new Error('Провайдер заблокировал запрос из браузера (CORS). Включите режим «Выполнять через сервер (прокси)» в настройках ИИ.');
+      }
+      throw e;
+    }
   }
 
   async function completeDirect(messages, opts) {
@@ -412,7 +419,7 @@
     proxyWrap.appendChild(proxy); proxyWrap.appendChild(proxyTxt);
 
     var hint = document.createElement('p'); hint.className = 'ai-hint';
-    hint.textContent = 'OpenAI и часть провайдеров блокируют прямые запросы из браузера (CORS) — для них включите прокси или используйте OpenRouter.';
+    hint.textContent = 'OpenAI и DeepSeek блокируют прямые запросы из браузера (CORS) — для них включите прокси. OpenRouter и Anthropic работают напрямую.';
 
     var row = document.createElement('div'); row.className = 'ai-actions';
     var save = document.createElement('button'); save.type = 'button'; save.className = 'btn btn-primary'; save.textContent = 'Сохранить';
