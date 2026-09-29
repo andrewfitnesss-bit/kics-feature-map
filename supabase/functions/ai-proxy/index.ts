@@ -27,16 +27,25 @@ function json(data, status = 200) {
   });
 }
 
-async function callOpenAI(baseURL, key, model, messages, maxTokens) {
+async function callOpenAI(baseURL, key, model, messages, maxTokens, provider) {
+  const body = { model, messages, stream: false, temperature: 0.4, max_tokens: maxTokens || 2048 };
+  // Для DeepSeek отключаем режим «размышлений», чтобы модель сразу отвечала,
+  // а не тратила лимит токенов на внутренние рассуждения (пустой content).
+  if (provider === "deepseek") body.thinking = { type: "disabled" };
+
   const resp = await fetch(baseURL.replace(/\/+$/, "") + "/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
-    body: JSON.stringify({ model, messages, stream: false, temperature: 0.4, max_tokens: maxTokens || 2048 }),
+    body: JSON.stringify(body),
   });
   if (!resp.ok) throw new Error("LLM: " + (await resp.text()));
   const data = await resp.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Пустой ответ модели");
+  const choice = data.choices?.[0];
+  let content = choice?.message?.content;
+  if (!content) content = choice?.message?.reasoning_content;
+  if (!content) {
+    throw new Error("Пустой ответ модели (finish_reason: " + (choice?.finish_reason || "?") + ")");
+  }
   return content;
 }
 
@@ -114,7 +123,7 @@ Deno.serve(async (req) => {
   try {
     const content = cfg.kind === "anthropic"
       ? await callAnthropic(baseURL, apiKey, body.model, messages, body.maxTokens)
-      : await callOpenAI(baseURL, apiKey, body.model, messages, body.maxTokens);
+      : await callOpenAI(baseURL, apiKey, body.model, messages, body.maxTokens, provider);
     return json({ content });
   } catch (e) {
     return json({ error: e.message || String(e) }, 502);

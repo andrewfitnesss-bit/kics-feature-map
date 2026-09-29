@@ -478,7 +478,7 @@
       saveSettings(settings);
       if (settings.useProxy && settings.apiKey) await persistServerCredential();
       try {
-        var r = await complete([{ role: 'user', content: 'Ответь одним словом: ОК' }], { maxTokens: 16 });
+        var r = await complete([{ role: 'user', content: 'Ответь одним словом: ОК' }], { maxTokens: 512 });
         showToast('Подключение работает: ' + r.slice(0, 60), 'success');
       } catch (e) {
         showToast('Ошибка: ' + (e && e.message ? e.message : e), 'error');
