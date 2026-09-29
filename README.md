@@ -36,13 +36,17 @@
 Развёртывание ИИ-функций:
 
 1. В Supabase → SQL Editor выполни `ai_schema.sql` (создаёт `ai_credentials`).
-2. Установи Supabase CLI и выполни:
+2. Установи Supabase CLI и, находясь в папке `kics_map` (там лежит `supabase/`),
+   выполни:
    ```
    supabase login
-   supabase link --project-ref <PROJECT_REF>
-   supabase functions deploy fetch-url
    supabase functions deploy ai-proxy
+   supabase functions deploy fetch-url
    ```
+   Функции лежат в `supabase/functions/…`; `project_id` уже прописан в
+   `supabase/config.toml`, поэтому `--project-ref` указывать не нужно.
+   Предупреждение «Docker is not running» можно игнорировать — для деплоя
+   функций Docker не нужен (он нужен только для локального `supabase start`).
 3. В настройках ИИ выбери провайдера, укажи ключ/модель и (при прокси)
    включи соответствующую галочку — ключ запишется на сервер автоматически.
 

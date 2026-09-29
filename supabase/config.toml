@@ -1,0 +1,8 @@
+# Supabase CLI config — минимально для `supabase functions deploy`.
+project_id = "bqddhtamnpgkrrhrvudy"
+
+[functions.ai-proxy]
+verify_jwt = true
+
+[functions.fetch-url]
+verify_jwt = false
