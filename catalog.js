@@ -73,10 +73,12 @@ saveMapRemote = function () {
   return saving;
 };
 selectMap = async function (id) {
+  if (window.KicsAI) window.KicsAI.cancel();
   if (!await flushCatalog()) return;
   await loadMap(id);
 };
 newMap = async function () {
+  if (window.KicsAI) window.KicsAI.cancel();
   if (!await flushCatalog()) return;
   var title = await window.KicsUI.prompt({ title: 'Новая таблица', inputLabel: 'Название', defaultValue: 'Новая таблица', validate: function (v) { return !!v || 'Введите название'; } });
   if (title === null) return;

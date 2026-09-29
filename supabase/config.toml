@@ -5,4 +5,4 @@ project_id = "bqddhtamnpgkrrhrvudy"
 verify_jwt = true
 
 [functions.fetch-url]
-verify_jwt = false
+verify_jwt = true

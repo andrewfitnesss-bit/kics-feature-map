@@ -1,3 +1,18 @@
+# v78: targeted documentation search
+
+In AI → Analyze documentation, enter the documentation URL and product/version. The URL selects a search domain, not a five-page crawl. Before each action, OpenRouter searches that domain for evidence; the selected generation model receives that evidence. Bulk descriptions search separately for each empty card. An OpenRouter key is required even when general web search is disabled (store it using proxy settings). No citations means the action stops rather than silently inventing documentation. This uses external indexed search, not Kaspersky's internal search API; completeness and immediate indexing are not guaranteed. Up to eight relevant results per search are budgeted, not the first eight links in the documentation. Redeploy ai-proxy and publish frontend v78; no new SQL migration beyond v77.
+
+# v77: security migration (required before deploying the frontend)
+
+1. Back up the database. Run `ai_schema.sql` only on a new installation, then run `ai_security.sql` in the SQL editor. Existing credentials are migrated into Vault transactionally; plaintext rows are removed. Do not re-run the legacy credential schema afterwards.
+2. Set the Edge secret `AI_ALLOWED_HOSTS` to a comma-separated list of **trusted exact domain names** for documentation and custom API endpoints. Unlisted domains fail closed. Approve only domains you control or trust; DNS checks do not replace network-level egress restrictions against DNS rebinding.
+3. Deploy `ai-proxy` and `fetch-url` from this directory using `supabase functions deploy NAME --project-ref bqddhtamnpgkrrhrvudy`.
+4. Deploy the frontend and refresh the browser. Proxy keys persist in Vault; direct-mode keys stay in memory and must be re-entered after reload.
+
+Documentation ingestion follows at most four additional same-origin links. HTML/plain text only; PDF and JavaScript-rendered pages require a text/HTML export. This is a bounded collection, not an exhaustive documentation audit. Context is scoped to account and map; remove it in AI settings. Search uses the OpenRouter model even when another provider is selected; reasoning and proxy now apply to that route too.
+
+Local checks: `node --test ai.test.cjs`, `node _audit_v63.js`, and `node --check` on frontend JavaScript. SQL and Deno deployment must also be validated against a staging project before production.
+
 # KICS Feature Map (v66)
 
 Инструмент планирования фич для PM. Одна рабочая версия с облачным

@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v76';
+const APP_VERSION = 'v78';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -2231,10 +2231,26 @@ function initEvents() {
     r.onload = function (ev) {
       try {
         var d = JSON.parse(ev.target.result);
-        if (!d.columns || !d.nodes) throw new Error('bad');
+        if (!Array.isArray(d.columns) || !Array.isArray(d.nodes)) throw new Error('bad');
+        var ids = new Set();
+        d.nodes.forEach(function (n) {
+          if (!n || !n.id || ids.has(n.id)) throw new Error('Некорректные ID карточек');
+          ids.add(n.id);
+        });
+        d.nodes.forEach(function (n) {
+          var seen = new Set([n.id]), p = n.parentId;
+          while (p) {
+            if (seen.has(p) || !ids.has(p)) throw new Error('Некорректное дерево');
+            seen.add(p); p = d.nodes.find(function (v) { return v.id === p; }).parentId;
+          }
+        });
+        if (window.KicsAI) window.KicsAI.cancel();
+        rememberDeletion('Импорт таблицы');
         state.columns = d.columns;
         state.nodes = d.nodes.map(normalizeNode);
-        nextId = d.nextId || 1;
+        state.availableTags = Array.isArray(d.availableTags) ? d.availableTags.filter(function (t) { return typeof t === 'string'; }) : [];
+        state.trash = Array.isArray(d.trash) ? d.trash.slice(-20) : [];
+        nextId = Math.max(Number(d.nextId) || 1, ...d.nodes.map(function (n) { return (Number(String(n.id).replace(/^n/, '')) || 0) + 1; }));
         rebuildChildren();
         scheduleSave();
         render();

@@ -1,3 +1,4 @@
 # Файлы с секретами — не пушить
 apply_schema.py
 *.py
+supabase/.temp/
