@@ -8,6 +8,7 @@
   var PROVIDERS = {
     openai:     { id: 'openai',     label: 'OpenAI',     baseURL: 'https://api.openai.com/v1',    defaultModel: 'gpt-4o-mini', needsKey: true },
     anthropic:  { id: 'anthropic',  label: 'Anthropic',  baseURL: 'https://api.anthropic.com/v1', defaultModel: 'claude-3-5-sonnet-latest', needsKey: true },
+    deepseek:   { id: 'deepseek',   label: 'DeepSeek',   baseURL: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat', needsKey: true },
     openrouter: { id: 'openrouter', label: 'OpenRouter', baseURL: 'https://openrouter.ai/api/v1', defaultModel: 'openai/gpt-4o-mini', needsKey: true },
     custom:     { id: 'custom',     label: 'Свой (OpenAI-совместимый)', baseURL: '', defaultModel: '', needsKey: true }
   };

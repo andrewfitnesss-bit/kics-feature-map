@@ -15,6 +15,7 @@ const CORS = {
 const PROVIDERS = {
   openai: { baseURL: "https://api.openai.com/v1", kind: "openai" },
   openrouter: { baseURL: "https://openrouter.ai/api/v1", kind: "openai" },
+  deepseek: { baseURL: "https://api.deepseek.com/v1", kind: "openai" },
   anthropic: { baseURL: "https://api.anthropic.com/v1", kind: "anthropic" },
   custom: { baseURL: "", kind: "openai" },
 };
