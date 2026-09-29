@@ -15,12 +15,24 @@
 
   var DEFAULTS = { provider: 'openai', model: '', baseURL: '', apiKey: '', useProxy: false };
 
+  // Карта «дефолтная модель → провайдер» — чтобы ловить устаревшую модель
+  // при смене провайдера (например, сохранённый gpt-4o-mini при выборе DeepSeek).
+  var KNOWN_DEFAULTS = {};
+  Object.keys(PROVIDERS).forEach(function (k) {
+    if (PROVIDERS[k].defaultModel) KNOWN_DEFAULTS[PROVIDERS[k].defaultModel] = k;
+  });
+
   function loadSettings() {
     var s = {};
     try { var raw = localStorage.getItem(LS_AI); if (raw) s = JSON.parse(raw) || {}; } catch (e) {}
     var base = Object.assign({}, DEFAULTS, s);
     var p = PROVIDERS[base.provider] || PROVIDERS.openai;
-    if (!base.model) base.model = p.defaultModel;
+    if (!base.model) {
+      base.model = p.defaultModel;
+    } else if (KNOWN_DEFAULTS[base.model] && KNOWN_DEFAULTS[base.model] !== base.provider) {
+      // Модель явно принадлежит другому провайдеру — сбрасываем на дефолт текущего.
+      base.model = p.defaultModel;
+    }
     if (!base.baseURL) base.baseURL = p.baseURL;
     return base;
   }
@@ -411,7 +423,14 @@
     var base = document.createElement('input'); base.type = 'text'; base.className = 'modal-input'; base.placeholder = 'https://api.example.com/v1'; base.value = settings.baseURL;
 
     var modelLbl = document.createElement('label'); modelLbl.className = 'ai-label'; modelLbl.textContent = 'Модель';
-    var model = document.createElement('input'); model.type = 'text'; model.className = 'modal-input'; model.placeholder = 'gpt-4o-mini'; model.value = settings.model;
+    var model = document.createElement('input'); model.type = 'text'; model.className = 'modal-input'; model.placeholder = 'напр. deepseek-flash'; model.value = settings.model;
+
+    // При смене провайдера подставляем его дефолтную модель и base URL.
+    sel.addEventListener('change', function () {
+      var p = PROVIDERS[sel.value] || PROVIDERS.openai;
+      model.value = p.defaultModel || '';
+      base.value = p.baseURL || '';
+    });
 
     var proxyWrap = document.createElement('label'); proxyWrap.className = 'ai-check';
     var proxy = document.createElement('input'); proxy.type = 'checkbox'; proxy.checked = !!settings.useProxy;
