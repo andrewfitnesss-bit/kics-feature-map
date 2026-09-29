@@ -47,6 +47,20 @@ test('Russian output instruction applies to normal and web-search requests', asy
     assert(s.calls[0].body.messages.some(m => m.role === 'system' && m.content.includes('только на русском языке') && m.content.includes('структуру JSON не меняй')));
   }
 });
+test('English selection applies to search evidence and generation without Russian override', async () => {
+  const s = setup({ provider: 'deepseek', useProxy: true, language: 'en' }, { url: 'https://support.kaspersky.com/business', product: 'KICS' }, [{ url_citation: { url: 'https://support.kaspersky.com/help' } }]);
+  await s.api.complete([{ role: 'user', content: 'Напиши описание' }], { docQuery: 'Device control' });
+  assert.equal(s.calls.length, 2);
+  for (const call of s.calls) {
+    assert(call.body.messages.some(m => m.role === 'system' && m.content.includes('only in English')));
+    assert(!call.body.messages.some(m => m.content.includes('только на русском языке')));
+  }
+});
+test('explicit task language overrides saved language', async () => {
+  const s = setup({ provider: 'deepseek', useProxy: true, language: 'en' });
+  await s.api.complete([], { language: 'ru' });
+  assert(s.calls[0].body.messages.some(m => m.content.includes('только на русском языке')));
+});
 test('in-flight credit error is explained and never retried automatically', async () => {
   const s = setup({ provider: 'deepseek', useProxy: true });
   let requests = 0;
