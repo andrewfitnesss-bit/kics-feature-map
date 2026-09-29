@@ -623,6 +623,7 @@
   }
 
   function runView(action, scope, nodeId, body) {
+    loadDocContext();
     body.innerHTML = '';
     var language = languagePicker(body);
     var back = document.createElement('button');
@@ -640,6 +641,21 @@
       body.appendChild(lbl);
       urlInput = document.createElement('input'); urlInput.type = 'url'; urlInput.className = 'modal-input ai-url'; urlInput.placeholder = 'https://…';
       body.appendChild(urlInput);
+      var draftKey = docKey() + ':input:' + (action.id === 'analyze-docs' || action.id === 'fill-description' ? 'documentation' : action.id);
+      var draft = {};
+      try { draft = JSON.parse(localStorage.getItem(draftKey) || '{}'); } catch (_) {}
+      urlInput.value = typeof draft.url === 'string' ? draft.url : (action.id === 'analyze-docs' || action.id === 'fill-description') && docContext ? docContext.url || '' : '';
+      var inputMapId = state.mapId;
+      var inputOwnerKey = docKey();
+      var rememberInput = function () {
+        if (state.mapId !== inputMapId || docKey() !== inputOwnerKey) return;
+        try {
+          var saved = { url: urlInput.value, product: productInput ? productInput.value : draft.product || '' };
+          localStorage.setItem(draftKey, JSON.stringify(saved));
+        } catch (_) { showToast('Не удалось сохранить ссылку в браузере', 'error'); }
+      };
+      urlInput.addEventListener('input', rememberInput);
+      urlInput.addEventListener('change', rememberInput);
     }
 
     var out = document.createElement('div'); out.className = 'ai-output';
@@ -648,7 +664,9 @@
     if (action.id === 'analyze-docs') {
       productInput = document.createElement('input'); productInput.className = 'modal-input';
       productInput.placeholder = 'Продукт и версия (например, KICS for Nodes 3.3)';
-      productInput.value = docContext && docContext.product || '';
+      productInput.value = typeof draft.product === 'string' ? draft.product : docContext && docContext.product || '';
+      productInput.addEventListener('input', rememberInput);
+      productInput.addEventListener('change', rememberInput);
       body.appendChild(productInput);
       var help = document.createElement('p'); help.textContent = 'Ссылка задаёт сайт поиска. Для каждого AI-задания ищутся релевантные страницы через OpenRouter, а не первые пять ссылок. Требуется ключ OpenRouter.'; body.appendChild(help);
     }

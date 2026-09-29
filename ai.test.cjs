@@ -9,7 +9,7 @@ function setup(options, doc, annotations = []) {
   const context = {
     AbortController, setTimeout, clearTimeout, URL,
     state: { mapId: 'a' }, currentUser: { id: 'u' },
-    localStorage: { getItem: k => k === 'kics_ai_settings_v1' ? JSON.stringify(options) : k === 'kics_ai_doc_v1:u:a' ? JSON.stringify(doc || null) : null, setItem: (k,v) => { stored[k] = v; }, removeItem() {} },
+    localStorage: { getItem: k => Object.hasOwn(stored, k) ? stored[k] : k === 'kics_ai_settings_v1' ? JSON.stringify(options) : k === 'kics_ai_doc_v1:u:a' ? JSON.stringify(doc || null) : null, setItem: (k,v) => { stored[k] = v; }, removeItem(k) { delete stored[k]; } },
     document: { readyState: 'loading', addEventListener() {} },
     sb: { auth: { getSession: async () => ({ data: { session: { access_token: 'test' } } }) } },
     window: { SUPABASE_CONFIG: { url: 'https://example.invalid' }, fetch: async (url, opts) => {
@@ -39,6 +39,25 @@ test('direct search includes reasoning', async () => {
 test('plaintext keys are not persisted', () => {
   const s = setup({ apiKey: 'secret-a', openRouterKey: 'secret-b' });
   assert(!s.stored.kics_ai_settings_v1.includes('secret-'));
+});
+test('documentation input survives closing and reopening another card, isolated per map', () => {
+  const s = setup({});
+  let elements = [];
+  const element = tag => {
+    const e = { tag, value: '', style: {}, events: {}, appendChild() {}, addEventListener(name, fn) { this.events[name] = fn; }, remove() {}, focus() {}, setAttribute() {} };
+    elements.push(e); return e;
+  };
+  Object.assign(s.context.document, { createElement: element, body: element('body'), getElementById: () => null });
+  s.context.getNodeById = id => ({ id, title: 'Card', tags: [] });
+  s.api.openPanel('card', '1', 'fill-description');
+  const field = elements.find(e => e.type === 'url');
+  field.value = 'https://support.kaspersky.com/business'; field.events.input();
+  elements = [];
+  s.api.openPanel('card', '2', 'fill-description');
+  assert.equal(elements.find(e => e.type === 'url').value, field.value);
+  s.context.state.mapId = 'b'; elements = [];
+  s.api.openPanel('card', '3', 'fill-description');
+  assert.equal(elements.find(e => e.type === 'url').value, '');
 });
 test('Russian output instruction applies to normal and web-search requests', async () => {
   for (const webSearch of [false, true]) {
