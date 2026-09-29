@@ -40,6 +40,13 @@ test('plaintext keys are not persisted', () => {
   const s = setup({ apiKey: 'secret-a', openRouterKey: 'secret-b' });
   assert(!s.stored.kics_ai_settings_v1.includes('secret-'));
 });
+test('Russian output instruction applies to normal and web-search requests', async () => {
+  for (const webSearch of [false, true]) {
+    const s = setup({ provider: 'deepseek', useProxy: true, webSearch });
+    await s.api.complete([{ role: 'user', content: 'Describe Device Control in JSON' }]);
+    assert(s.calls[0].body.messages.some(m => m.role === 'system' && m.content.includes('только на русском языке') && m.content.includes('структуру JSON не меняй')));
+  }
+});
 test('in-flight credit error is explained and never retried automatically', async () => {
   const s = setup({ provider: 'deepseek', useProxy: true });
   let requests = 0;
