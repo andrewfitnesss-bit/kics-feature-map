@@ -59,12 +59,16 @@ dest=document.querySelector('.card[data-node-id="'+child.id+'"]');dest.dispatchE
 viewMode=true;render();await tick();check(!document.querySelector('.board-drag-handle'),'readonly board');
 check(!document.body.dataset.failure,document.body.dataset.failure);
 viewMode=false;var richNode=getNodeById(child.id);openModal(richNode.id);
+state.availableTags=['security','mvp'];openModal(richNode.id);document.querySelector('#existingTagChoices button').click();check(document.getElementById('modalTags').value.includes('mvp'),'existing tag added');check(document.querySelector('#existingTagChoices button').disabled,'duplicate tag disabled');
 var ed=document.getElementById('descriptionEditor');
 check(ed.textContent.includes('Search evidence'),'legacy description loaded');
 ed.innerHTML='<h2>Heading</h2><p><strong>Bold</strong> and <a href="https://example.com">link</a></p><pre>'+String.fromCharCode(9)+'Indented</pre><table><tbody><tr><td>A</td><td>B</td></tr></tbody></table>';
 ed.dispatchEvent(new Event('input'));saveModal();
 check(richNode.note.includes(String.fromCharCode(9)+'Indented'),'tabs preserved');check(richNode.noteHtml.includes('<strong>Bold</strong>'),'markup saved');
 openModal(richNode.id);check(!!ed.querySelector('table'),'table reopened');closeModal();
+openModal(richNode.id);
+function tableAction(label){var c=ed.querySelector('td,th'),r=document.createRange();r.selectNodeContents(c);r.collapse(true);var s=window.getSelection();s.removeAllRanges();s.addRange(r);ed.dispatchEvent(new MouseEvent('mouseup'));Array.from(document.querySelectorAll('#descriptionToolbar button')).find(b=>b.textContent===label).click();}
+tableAction('+ Строка');check(ed.querySelector('table').rows.length===2,'insert row');tableAction('+ Столбец');check(ed.querySelector('table').rows[0].cells.length===3,'insert column');tableAction('− Столбец');check(ed.querySelector('table').rows[0].cells.length===2,'delete column');tableAction('− Строка');check(ed.querySelector('table').rows.length===1,'delete row');closeModal();
 openCardView(richNode.id);check(!!document.querySelector('#cardViewBody strong'),'rich view');closeCardView();
 var hostile='<img src="x" onerror="alert(1)"><a href="javascript:alert(1)">bad</a><svg onload="alert(1)"></svg><iframe src="https://example.com"></iframe>';
 var safe=KicsRich.sanitize(hostile);check(!/onerror|javascript:|<svg|<iframe/.test(safe),'html sanitized');

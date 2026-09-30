@@ -94,6 +94,22 @@
     button('Ссылка', 'Вставить ссылку', function () { askLink(false); }); button('Убрать ссылку', 'Удалить ссылку с выделения', function () { command('unlink'); }); button('Картинка URL', 'Изображение по HTTPS-ссылке', function () { askLink(true); });
     var file = document.getElementById('descriptionImage'); button('Файл', 'Вставить картинку до 500 КБ', function () { rememberRange(); file.click(); }); file.onchange = function () { imageFile(file.files[0]); file.value = ''; };
     button('Таблица', 'Вставить таблицу 2 × 3', function () { insert('<table><tbody><tr><th>Колонка 1</th><th>Колонка 2</th><th>Колонка 3</th></tr><tr><td> </td><td> </td><td> </td></tr></tbody></table><p><br></p>'); });
+    function editTable(action) {
+      restoreRange();
+      var anchor = window.getSelection().anchorNode;
+      var cell = anchor && (anchor.nodeType === 1 ? anchor : anchor.parentElement).closest('td,th');
+      if (!cell || !editor.contains(cell)) return showToast('Сначала поставьте курсор в ячейку таблицы', 'info');
+      var table = cell.closest('table'), row = cell.parentElement, index = cell.cellIndex;
+      if (table.querySelector('[colspan],[rowspan],table')) return showToast('Сначала уберите объединённые ячейки или вложенные таблицы: для них изменение сетки пока недоступно.', 'info');
+      var clone = table.cloneNode(true), rows = Array.from(table.rows), rowIndex = rows.indexOf(row), target = clone.rows[rowIndex];
+      if (action === 'row-add') { var added = clone.insertRow(rowIndex + 1); for (var i = 0; i < row.cells.length; i++) added.insertCell().innerHTML = '<br>'; }
+      if (action === 'row-delete') clone.deleteRow(rowIndex);
+      if (action === 'col-add') Array.from(clone.rows).forEach(function (r) { var td = document.createElement(r.parentElement.tagName === 'THEAD' ? 'th' : 'td'); td.innerHTML = '<br>'; r.insertBefore(td, r.cells[index + 1] || null); });
+      if (action === 'col-delete') Array.from(clone.rows).forEach(function (r) { if (r.cells[index]) r.deleteCell(index); });
+      var selection = window.getSelection(), selected = document.createRange(); selected.selectNode(table); selection.removeAllRanges(); selection.addRange(selected); range = selected.cloneRange();
+      insert(clone.rows.length && clone.rows[0].cells.length ? clone.outerHTML : '<p><br></p>');
+    }
+    [['+ Строка','row-add'],['− Строка','row-delete'],['+ Столбец','col-add'],['− Столбец','col-delete']].forEach(function (item) { button(item[0], item[0] + ' относительно текущей ячейки', function () { editTable(item[1]); }); });
     button('⇥ Табуляция', 'Вставить символ табуляции', function () { command('insertText', '\t'); });
     editor.addEventListener('input', function () { try { sync(); } catch(e) { showToast(e.message, 'error'); } });
     editor.addEventListener('keyup', rememberRange); editor.addEventListener('mouseup', rememberRange); editor.addEventListener('blur', rememberRange);
@@ -116,7 +132,16 @@
     originalOpen(id); if (state.editingNodeId !== id || !canEdit()) return;
     session = { id: id, map: state.mapId, user: currentUser && currentUser.id, before: JSON.stringify(getNodeById(id)) };
     editor.innerHTML = getHtml(getNodeById(id)); initial = editor.innerHTML; range = null; sync();
+    renderTagChoices();
   };
+  function renderTagChoices() {
+    var input = document.getElementById('modalTags'), box = document.getElementById('existingTagChoices');
+    if (!box) { box = document.createElement('div'); box.id = 'existingTagChoices'; box.className = 'existing-tag-choices'; input.insertAdjacentElement('afterend', box); input.addEventListener('input', renderTagChoices); }
+    box.replaceChildren();
+    var selected = input.value.split(',').map(function(t) { return t.trim().toLowerCase(); }).filter(Boolean);
+    var tags = Array.from(new Set(getAllTags().concat(state.nodes.flatMap(function(n) { return n.tags || []; })))).sort();
+    tags.forEach(function(tag) { var b = document.createElement('button'); b.type = 'button'; b.textContent = tag; b.className = 'card-tag'; b.disabled = selected.includes(tag.toLowerCase()); b.setAttribute('aria-label', 'Добавить тег ' + tag); b.onclick = function() { var values = input.value.split(',').map(function(t) { return t.trim(); }).filter(Boolean); if (!values.some(function(t) { return t.toLowerCase() === tag.toLowerCase(); })) values.push(tag); input.value = values.join(', '); renderTagChoices(); }; box.appendChild(b); });
+  }
   saveModal = function () {
     if (!session || !alive(session) || (currentUser && currentUser.id) !== session.user) return showToast('Карточка или права изменились. Откройте редактор заново.', 'error');
     var node = getNodeById(session.id); if (!node) return;

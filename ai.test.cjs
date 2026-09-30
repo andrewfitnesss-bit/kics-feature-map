@@ -81,12 +81,20 @@ test('explicit task language overrides saved language', async () => {
   assert(s.calls[0].body.messages.some(m => m.content.includes('только на русском языке')));
 });
 test('in-flight credit error is explained and never retried automatically', async () => {
-  const s = setup({ provider: 'deepseek', useProxy: true });
+  const s = setup({ provider: 'openrouter', useProxy: true });
   let requests = 0;
   s.context.window.fetch = async () => { requests++; return { ok: false, text: async () => JSON.stringify({ error: 'This request would exceed your available credits given your current in-flight requests.' }) }; };
   await assert.rejects(s.api.complete([]), /уже выполняющихся/);
   await assert.rejects(s.api.complete([]), /пауза на 60 секунд/);
   assert.equal(requests, 1);
+});
+test('page documentation mode uses selected provider without OpenRouter', async () => {
+  const s = setup({ provider:'deepseek', useProxy:true, docMode:'page' }, {url:'https://docs.example.com/manual'});
+  s.context.window.fetch = async (url, opts) => { s.calls.push({url,body:JSON.parse(opts.body)}); return {ok:true,json:async()=>url.endsWith('fetch-url') ? {text:'Verified page text'} : {content:'OK'}}; };
+  await s.api.complete([], {docQuery:'Feature'});
+  assert.equal(s.calls.length,2); assert.match(s.calls[0].url,/fetch-url$/);
+  assert.equal(s.calls[1].body.provider,'deepseek');
+  assert(s.calls[1].body.messages.some(m=>m.content.includes('Verified page text')));
 });
 test('simultaneous completions are rejected within a tab', async () => {
   const s = setup({ provider: 'deepseek', useProxy: true });
