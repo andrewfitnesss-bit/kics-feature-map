@@ -3,6 +3,8 @@
   'use strict';
   var dragged = null, pending = false;
   function clear() {
+    var root = document.querySelector('.board-root-drop');
+    if (root) root.hidden = true;
     document.querySelectorAll('.board-drop-valid,.board-drop-invalid,.board-dragging').forEach(function (el) {
       el.classList.remove('board-drop-valid', 'board-drop-invalid', 'board-dragging');
     });
@@ -66,6 +68,8 @@
     handle.addEventListener('dragstart', function (e) {
       if (!canEdit() || pending) { e.preventDefault(); return; }
       dragged = { id: node.id, map: state.mapId }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/kics-board-node', node.id);
+      var root = document.querySelector('.board-root-drop');
+      if (root) root.hidden = false;
       if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(card, 20, 20);
       card.classList.add('board-dragging');
     });
@@ -75,7 +79,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     var container = document.getElementById('columnsContainer');
     if (!container) return;
-    var root = document.createElement('div'); root.className = 'board-root-drop'; root.textContent = '⠿ Перенос веток: тяните за значок на карточке → на нового родителя. Для переноса в корень отпустите здесь.';
+    var root = document.createElement('div'); root.className = 'board-root-drop'; root.hidden = true; root.textContent = 'Перенести в корень';
     container.parentNode.insertBefore(root, container); wireTarget(root, null);
   });
 })();
