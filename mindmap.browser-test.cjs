@@ -9,7 +9,7 @@ if (!fs.existsSync(chrome)) throw new Error('Set CHROME_PATH to a Chrome executa
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'kics-mindmap-'));
 let html = fs.readFileSync(path.join(dir,'index.html'),'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]+>/g,'');
 html = html.replace('</head>', () => '<style>'+fs.readFileSync(path.join(dir,'styles.css'),'utf8')+'</style></head>');
-const scripts = ['model.js','ui.js','app.js','catalog.js','mindmap-core.js','mindmap-editor.js'].map(file => {
+const scripts = ['model.js','ui.js','app.js','catalog.js','mindmap-core.js','mindmap-editor.js','board-drag.js'].map(file => {
   let code = fs.readFileSync(path.join(dir,file),'utf8');
   if(file === 'app.js') code = code.replace("document.addEventListener('DOMContentLoaded', init);",'');
   return '<script>'+code.replace(/<\/script/gi,'<\\/script')+'</script>';
@@ -40,8 +40,22 @@ document.querySelector('#mindmapNodes [data-node-id="'+root.id+'"]').click();
 Array.from(document.querySelectorAll('.mm-panel button')).find(b=>b.textContent.includes('Дочерняя')).click();await tick();
 check(state.nodes.some(n=>n.title==='Created in map' && n.parentId===root.id && n.colIndex===1),'create child');
 state.mapId='other-map';renderMindmap(true);await tick();check(document.querySelector('#mindmapNodes [data-node-id="'+child.id+'"]'),'view isolated by map');
+closeMindmap();render();await tick();
+var target=createNode(null,0,'Drop target');state.nodes.push(target);rebuildChildren();render();await tick();
+KicsUI.confirm=async()=>true;
+var data=new DataTransfer();
+var source=document.querySelector('.card[data-node-id="'+child.id+'"] .board-drag-handle');
+check(!!source,'board drag handle');source.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:data}));
+var dest=document.querySelector('.card[data-node-id="'+target.id+'"]');
+dest.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:data}));check(dest.classList.contains('board-drop-valid'),'valid target highlighted');
+dest.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data}));await tick();
+check(getNodeById(child.id).parentId===target.id,'board move');check(getNodeById(child.id).note==='Search evidence','description preserved');
+check(state.trash.length>0,'move snapshot');
+source=document.querySelector('.card[data-node-id="'+target.id+'"] .board-drag-handle');data=new DataTransfer();source.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:data}));
+dest=document.querySelector('.card[data-node-id="'+child.id+'"]');dest.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:data}));check(dest.classList.contains('board-drop-invalid'),'cycle blocked');source.dispatchEvent(new DragEvent('dragend',{bubbles:true,dataTransfer:data}));
+viewMode=true;render();await tick();check(!document.querySelector('.board-drag-handle'),'readonly board');
 check(!document.body.dataset.failure,document.body.dataset.failure);
-document.body.innerHTML='<pre id="result">PASS: render, selection, status, undo, redo, collapse persistence, search, read-only, create, map isolation</pre>';
+document.body.innerHTML='<pre id="result">PASS: mindmap editing and persistence; board move, preservation, snapshot, cycle protection, read-only</pre>';
 }catch(e){document.body.innerHTML='<pre id="result">FAIL: '+e.message+'</pre>';}
 });</script>`;
 fs.writeFileSync(path.join(temp,'test.html'),html.replace('</body>',()=>scripts+test+'</body>'));
