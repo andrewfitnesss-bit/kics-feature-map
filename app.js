@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v87';
+const APP_VERSION = 'v88';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1503,7 +1503,7 @@ function saveModal() {
   // Новые теги добавляем в общий набор таблицы
   if (!state.availableTags) state.availableTags = [];
   n.tags.forEach(function (t) { if (state.availableTags.indexOf(t) === -1) state.availableTags.push(t); });
-  n.note = $('#modalNote').value.trim(); n.status = $('#modalStatus').value;
+  n.note = $('#modalNote').value; n.status = $('#modalStatus').value;
   n.color = $('#modalColor').value;
   pruneUnusedTags();
   var y = $('#modalYear').value, q = $('#modalQuarter').value;

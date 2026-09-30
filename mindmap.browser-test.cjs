@@ -9,7 +9,7 @@ if (!fs.existsSync(chrome)) throw new Error('Set CHROME_PATH to a Chrome executa
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'kics-mindmap-'));
 let html = fs.readFileSync(path.join(dir,'index.html'),'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link[^>]+>/g,'');
 html = html.replace('</head>', () => '<style>'+fs.readFileSync(path.join(dir,'styles.css'),'utf8')+'</style></head>');
-const scripts = ['model.js','ui.js','app.js','catalog.js','mindmap-core.js','mindmap-editor.js','board-drag.js'].map(file => {
+const scripts = ['model.js','ui.js','app.js','catalog.js','mindmap-core.js','mindmap-editor.js','board-drag.js','rich-description.js'].map(file => {
   let code = fs.readFileSync(path.join(dir,file),'utf8');
   if(file === 'app.js') code = code.replace("document.addEventListener('DOMContentLoaded', init);",'');
   return '<script>'+code.replace(/<\/script/gi,'<\\/script')+'</script>';
@@ -58,7 +58,24 @@ source=document.querySelector('.card[data-node-id="'+target.id+'"] .board-drag-h
 dest=document.querySelector('.card[data-node-id="'+child.id+'"]');dest.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer:data}));check(dest.classList.contains('board-drop-invalid'),'cycle blocked');source.dispatchEvent(new DragEvent('dragend',{bubbles:true,dataTransfer:data}));
 viewMode=true;render();await tick();check(!document.querySelector('.board-drag-handle'),'readonly board');
 check(!document.body.dataset.failure,document.body.dataset.failure);
-document.body.innerHTML='<pre id="result">PASS: mindmap editing and persistence; board move, preservation, snapshot, cycle protection, read-only</pre>';
+viewMode=false;var richNode=getNodeById(child.id);openModal(richNode.id);
+var ed=document.getElementById('descriptionEditor');
+check(ed.textContent.includes('Search evidence'),'legacy description loaded');
+ed.innerHTML='<h2>Heading</h2><p><strong>Bold</strong> and <a href="https://example.com">link</a></p><pre>'+String.fromCharCode(9)+'Indented</pre><table><tbody><tr><td>A</td><td>B</td></tr></tbody></table>';
+ed.dispatchEvent(new Event('input'));saveModal();
+check(richNode.note.includes(String.fromCharCode(9)+'Indented'),'tabs preserved');check(richNode.noteHtml.includes('<strong>Bold</strong>'),'markup saved');
+openModal(richNode.id);check(!!ed.querySelector('table'),'table reopened');closeModal();
+openCardView(richNode.id);check(!!document.querySelector('#cardViewBody strong'),'rich view');closeCardView();
+var hostile='<img src="x" onerror="alert(1)"><a href="javascript:alert(1)">bad</a><svg onload="alert(1)"></svg><iframe src="https://example.com"></iframe>';
+var safe=KicsRich.sanitize(hostile);check(!/onerror|javascript:|<svg|<iframe/.test(safe),'html sanitized');
+var round=JSON.parse(JSON.stringify(KicsModel.payload(state,nextId)));var saved=round.nodes.find(n=>n.id===richNode.id);check(KicsRich.getHtml(saved).includes('<table>'),'JSON round trip');
+richNode.note='AI replacement';check(!KicsRich.getHtml(richNode).includes('<table>'),'stale rich markup ignored');
+var imported={};KicsRich.assignHtml(imported,'<p style="margin-left:40px">Imported</p><img src="/attachment.png">','https://example.com/');check(imported.noteHtml.includes('https://example.com/attachment.png'),'relative import images resolved');
+openModal(richNode.id);ed.focus();var selection=window.getSelection();var range=document.createRange();range.selectNodeContents(ed);selection.removeAllRanges();selection.addRange(range);
+var clip=new DataTransfer();clip.setData('text/html','<p><em>Pasted text</em></p><ul><li>List item</li></ul>');ed.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:clip}));check(!!ed.querySelector('em') && !!ed.querySelector('li'),'formatted clipboard paste');
+saveModal();openModal(richNode.id);check(!!ed.querySelector('em'),'pasted markup survives save');closeModal();
+check(!document.body.dataset.failure,document.body.dataset.failure);
+document.body.innerHTML='<pre id="result">PASS: mindmap, board moves, rich editing, tabs, tables, HTML safety, JSON round trip, legacy and AI compatibility</pre>';
 }catch(e){document.body.innerHTML='<pre id="result">FAIL: '+e.message+'</pre>';}
 });</script>`;
 fs.writeFileSync(path.join(temp,'test.html'),html.replace('</body>',()=>scripts+test+'</body>'));

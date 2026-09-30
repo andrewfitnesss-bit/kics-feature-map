@@ -100,12 +100,16 @@
     var mapId = state.mapId, n = getNodeById(ctx.nodeId);
     if (!n) return;
     var before = n.note;
+    if (window.KicsRich && window.KicsRich.hasDraft(n.id)) throw new Error('Сначала сохраните или закройте изменённое описание в редакторе.');
     var value = description(result);
     if (before && !await window.KicsUI.confirm({ title: 'Заменить описание?', message: 'Существующее описание будет заменено. Снимок сохранится для отката.', confirmLabel: 'Заменить', cancelLabel: 'Отмена' })) return;
     if (state.mapId !== mapId || getNodeById(ctx.nodeId) !== n || n.note !== before || !canEdit()) throw new Error('Карточка изменилась. Повторите операцию.');
+    if (window.KicsRich && window.KicsRich.hasDraft(n.id)) throw new Error('Описание изменилось в редакторе. Сначала сохраните его.');
     rememberDeletion('AI: замена описания'); n.note = value;
+    if (window.KicsRich) window.KicsRich.clear(n);
     n.aiSources = lastSources; scheduleSave(); render();
     var ta = document.getElementById('modalNote'); if (ta) ta.value = value;
+    if (window.KicsRich) window.KicsRich.refresh(n);
   }
 
   // Контекст документации (загружается через «Проанализировать документацию»).
@@ -517,7 +521,7 @@
             var desc = parsed[String(idx + 1)];
             if (typeof desc === 'string' && desc.trim() && !(c.note || '').trim()) {
               if (getNodeById(c.id) !== c) return;
-              c.note = description(desc); c.aiSources = lastSources; filled++;
+              c.note = description(desc); if (window.KicsRich) window.KicsRich.clear(c); c.aiSources = lastSources; filled++;
             }
           });
           scheduleSave(); render();
@@ -552,7 +556,7 @@
     }).then(function (ok) {
       if (!ok || state.mapId !== mapId || !canEdit()) return;
       if (typeof rememberDeletion === 'function') rememberDeletion('Clear descriptions');
-      state.nodes.forEach(function (n) { if (n.type !== 'comment') n.note = ''; });
+      state.nodes.forEach(function (n) { if (n.type !== 'comment') { n.note = ''; if (window.KicsRich) window.KicsRich.clear(n); } });
       scheduleSave(); render();
       showToast('Все описания очищены', 'success');
     });

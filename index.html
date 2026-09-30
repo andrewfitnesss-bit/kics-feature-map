@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230071e3'/%3E%3Ctext x='8' y='12' font-size='10' text-anchor='middle' fill='white'%3EK%3C/text%3E%3C/svg%3E">
   <title>Карта фич ИБ‑продукта</title>
-  <link rel="stylesheet" href="styles.css?v=85">
+  <link rel="stylesheet" href="styles.css?v=88">
 </head>
 <body>
   <!-- Supabase JS (v2) — локальная копия, чтобы не грузить с CDN -->
@@ -127,8 +127,14 @@
         <input type="text" id="modalTitle" class="modal-input" placeholder="Название…">
         <label>Теги (через запятую)</label>
         <input type="text" id="modalTags" class="modal-input" placeholder="MVP, security, v2.0…">
-        <label>Описание</label>
-        <textarea id="modalNote" class="modal-textarea" rows="3" placeholder="Детали…"></textarea>
+        <section class="description-section">
+          <div class="description-heading"><label id="descriptionLabel">Описание</label><button type="button" id="descriptionExpand" class="btn btn-secondary btn-sm">⤢ Размер окна</button></div>
+          <div id="descriptionToolbar" class="description-toolbar" role="toolbar" aria-label="Форматирование описания"></div>
+          <div id="descriptionEditor" class="rich-content description-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="descriptionLabel" spellcheck="true"></div>
+          <textarea id="modalNote" hidden></textarea>
+          <input id="descriptionImage" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+          <div class="description-status"><span id="descriptionCount">0 символов</span><span>Ctrl+Enter — сохранить · Shift+Tab — выйти из поля</span></div>
+        </section>
         <label>Цвет карточки</label>
         <select id="modalColor" class="modal-select">
           <option value="none">Без цвета</option>
@@ -237,10 +243,11 @@
 
   <script src="model.js?v=17"></script>
   <script src="ui.js?v=17"></script>
-  <script src="app.js?v=87"></script>
+  <script src="app.js?v=88"></script>
 <script src="catalog.js?v=77"></script>
-<script src="ai.js?v=84"></script>
+<script src="ai.js?v=88"></script>
 <script src="mindmap-core.js?v=84"></script>
-<script src="mindmap-editor.js?v=84"></script>
-<script src="board-drag.js?v=87"></script></body>
+<script src="mindmap-editor.js?v=88"></script>
+<script src="board-drag.js?v=87"></script>
+<script src="rich-description.js?v=88"></script></body>
 </html>

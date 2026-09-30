@@ -113,6 +113,7 @@
     button('ИИ для карточки', function () { if (window.KicsAI) KicsAI.openCardMenu(n.id); }, panel);
     button('Показать на доске', function () { var id = n.id; closeMindmap(); openCardView(id); var card = Array.from(document.querySelectorAll('.card[data-node-id]')).find(function (el) { return el.dataset.nodeId === id; }); if (card) card.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, panel);
     element('h4', 'Описание', panel); var text = element('div', n.note || 'Описание пока не заполнено', panel); text.className = 'mm-description';
+    if (n.note && window.KicsRich) window.KicsRich.render(text, n);
     element('h4', 'Заметка', panel); element('div', n.memo || '—', panel).className = 'mm-description';
     element('p', (n.tags || []).join(' · '), panel);
   }
