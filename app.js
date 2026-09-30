@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v85';
+const APP_VERSION = 'v86';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -77,8 +77,10 @@ function rebuildChildren() {
   state.nodes.forEach(function (n) {
     if (n.type !== 'comment' && isLeaf(n)) leafIds[n.id] = true;
   });
+  var existingCards = getModelIndex().byId;
   state.nodes = state.nodes.filter(function (n) {
-    return n.type !== 'comment' || state.nodes.some(function (card) { return card.type !== 'comment' && card.id === n.targetId; });
+    var target = existingCards[n.targetId];
+    return n.type !== 'comment' || (target && target.type !== 'comment');
   });
   var commentTargets = Object.create(null);
   state.nodes.forEach(function (n) {
@@ -102,7 +104,7 @@ function getCommentFor(targetId) { return getModelIndex().commentsByTarget[targe
 // Лист — узел без детей-карточек в следующей настоящей колонке
 function isLeaf(node) {
   if (node.type === 'comment') return false;
-  return !state.nodes.some(function (c) { return c.parentId === node.id && c.type !== 'comment' && c.colIndex === node.colIndex + 1; });
+  return !getChildren(node.id).some(function (c) { return c.colIndex === node.colIndex + 1; });
 }
 function nodeMatchesFilter(node) {
   if (state.searchQuery) { var q = state.searchQuery.toLowerCase(); if (node.title.toLowerCase().indexOf(q) === -1 && node.note.toLowerCase().indexOf(q) === -1 && (node.memo || '').toLowerCase().indexOf(q) === -1 && !node.tags.some(function (t) { return t.toLowerCase().indexOf(q) !== -1; })) return false; }
@@ -270,12 +272,24 @@ async function loadMaps() {
 async function loadMap(mapId) {
   var meta = state.maps.find(function (m) { return m.id === mapId; });
   if (!meta) return;
+  var loadStarted = performance.now();
+  if (typeof setSaveStatus === 'function') setSaveStatus('Загрузка таблицы…');
   var { data, error } = await sb.from('maps_next').select('*').eq('id', mapId).maybeSingle();
-  if (error || !data) { showError('не удалось загрузить таблицу'); return; }
+  var fetchedAt = performance.now();
+  if (error || !data) { if (typeof setSaveStatus === 'function') setSaveStatus('Ошибка загрузки'); showError('не удалось загрузить таблицу'); return; }
   applyMap(data, !!meta.is_owner);
   try { localStorage.setItem(LAST_MAP_KEY, mapId); } catch (e) {}
   renderMapSelector();
   render();
+  var renderedAt = performance.now();
+  requestAnimationFrame(function () { requestAnimationFrame(function () {
+    if (state.mapId !== mapId) return;
+    var timing = { networkMs: Math.round(fetchedAt - loadStarted), buildMs: Math.round(renderedAt - fetchedAt), totalMs: Math.round(performance.now() - loadStarted), cards: state.nodes.filter(function (n) { return n.type !== 'comment'; }).length };
+    window.KicsLoadTiming = timing;
+    var status = document.getElementById('catalogSave');
+    if (status && status.textContent === 'Загрузка таблицы…') status.textContent = 'Загружено за ' + (timing.totalMs / 1000).toFixed(1) + ' с';
+    if (status) status.title = 'Сеть: ' + timing.networkMs + ' мс; построение: ' + timing.buildMs + ' мс; до завершения раскладки: ' + timing.totalMs + ' мс';
+  }); });
 }
 
 async function createFirstMap() {
@@ -1082,7 +1096,9 @@ function renderContent() {
     cd.appendChild(empty);
     return;
   }
-  roots.forEach(function (n) { cd.appendChild(renderCardBlock(n, 0)); });
+  var fragment = document.createDocumentFragment();
+  roots.forEach(function (n) { fragment.appendChild(renderCardBlock(n, 0)); });
+  cd.appendChild(fragment);
 }
 
 function renderCardBlock(node, depth) {
