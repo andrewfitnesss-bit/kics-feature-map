@@ -5,7 +5,7 @@
 
 const LS_KEY = 'kics_next_feature_map';
 const LAST_MAP_KEY = 'kics_next_last_map_id';
-const APP_VERSION = 'v89';
+const APP_VERSION = 'v90';
 
 // ──────────────────────────────────────
 // 1. Суpabase client (инициализируется в init)
@@ -1280,8 +1280,7 @@ function createCardElement(node) {
       // Свернуть/развернуть — только если у карточки есть дочерние (актуально для ветки)
       if (hasChildren) items.push(isCollapsed ? { value: 'expand', label: 'Развернуть' } : { value: 'collapse', label: 'Свернуть' });
       if (window.KicsAI) {
-        items.push({ value: 'ai-desc', label: 'Описание AI' });
-        items.push({ value: 'ai', label: 'ИИ…' });
+        items.push({ value: 'ai-desc', label: 'Сгенерировать AI' });
       }
       items.push(
         { value: 'note', label: 'Заметка' },

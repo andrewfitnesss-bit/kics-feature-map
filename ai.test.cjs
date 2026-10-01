@@ -36,6 +36,15 @@ test('direct search includes reasoning', async () => {
   await s.api.complete([]);
   assert.equal(s.calls[0].body.reasoning.enabled, true);
 });
+test('per-task search and reasoning overrides do not change saved defaults', async () => {
+  const s = setup({provider:'deepseek',useProxy:true,webSearch:true,reasoning:true});
+  await s.api.complete([], {webSearch:false,reasoning:false});
+  assert.equal(s.calls[0].body.provider,'deepseek');
+  assert.equal(s.calls[0].body.thinking,false);
+  await s.api.complete([]);
+  assert.equal(s.calls[1].body.provider,'openrouter');
+  assert.equal(s.calls[1].body.reasoning,true);
+});
 test('plaintext keys are not persisted', () => {
   const s = setup({ apiKey: 'secret-a', openRouterKey: 'secret-b' });
   assert(!s.stored.kics_ai_settings_v1.includes('secret-'));

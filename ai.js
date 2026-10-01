@@ -90,7 +90,8 @@
     try { return await window.fetch(url, Object.assign({}, options, { signal: controller.signal })); }
     finally { clearTimeout(timer); requests.delete(controller); }
   }
-  function description(text) {
+  function description(text, size) {
+    if (size === 'large') { if (!String(text).trim() || text.length > 12000) throw new Error('Большое описание должно быть непустым и не длиннее 12000 символов.'); return text.trim(); }
     var parts = String(text || '').trim().split(/\n\s*\n/).filter(Boolean);
     if (parts.length < 2 || parts.length > 3 || text.length > 1800) throw new Error('Описание должно содержать 2–3 абзаца и не более 1800 символов. Повторите генерацию.');
     return text.trim();
@@ -101,7 +102,7 @@
     if (!n) return;
     var before = n.note;
     if (window.KicsRich && window.KicsRich.hasDraft(n.id)) throw new Error('Сначала сохраните или закройте изменённое описание в редакторе.');
-    var value = description(result);
+    var value = description(result, ctx.size);
     if (before && !await window.KicsUI.confirm({ title: 'Заменить описание?', message: 'Существующее описание будет заменено. Снимок сохранится для отката.', confirmLabel: 'Заменить', cancelLabel: 'Отмена' })) return;
     if (state.mapId !== mapId || getNodeById(ctx.nodeId) !== n || n.note !== before || !canEdit()) throw new Error('Карточка изменилась. Повторите операцию.');
     if (window.KicsRich && window.KicsRich.hasDraft(n.id)) throw new Error('Описание изменилось в редакторе. Сначала сохраните его.');
@@ -150,8 +151,9 @@
   var completionBusy = false;
   var creditCooldownUntil = 0;
   async function complete(messages, opts) {
+    opts = Object.assign({ reasoning: !!settings.reasoning, webSearch: !!settings.webSearch }, opts || {});
     if (completionBusy) throw new Error('ИИ-запрос уже выполняется в этой вкладке. Дождитесь завершения.');
-    if (settings.provider === 'openrouter' || settings.webSearch || ((opts || {}).docQuery && settings.docMode !== 'page')) {
+    if (settings.provider === 'openrouter' || opts.webSearch || (opts.docQuery && settings.docMode !== 'page')) {
       if (Date.now() < creditCooldownUntil) throw new Error('После ошибки бюджета включена пауза на 60 секунд. Дождитесь завершения запросов OpenRouter; автоматического повтора нет.');
     }
     completionBusy = true;
@@ -189,8 +191,8 @@
         }
       }
       var result;
-      if (settings.webSearch) result = await completeWebSearch(messages, opts);
-      else if (settings.reasoning) result = await completeReasoning(messages, opts);
+      if (opts.webSearch) result = await completeWebSearch(messages, opts);
+      else if (opts.reasoning) result = await completeReasoning(messages, opts);
       else if (settings.useProxy) result = await completeProxy(messages, opts);
       else {
         if (!settings.apiKey) throw new Error('Укажите API-ключ в настройках ИИ');
@@ -219,13 +221,13 @@
     var model = String(settings.searchModel || 'openai/gpt-4o-mini:online');
     // Search uses the explicitly selected search model, never a silent R1 substitution.
     model = model.replace(/:online/g, '');
-    if (settings.useProxy) return completeProxy(messages, Object.assign({}, opts, { provider: 'openrouter', model: model, reasoning: !!settings.reasoning, webSearch: true }));
+    if (settings.useProxy) return completeProxy(messages, Object.assign({}, opts, { provider: 'openrouter', model: model, reasoning: opts.reasoning === undefined ? !!settings.reasoning : !!opts.reasoning, webSearch: true }));
     var key = settings.openRouterKey;
     if (!key) throw new Error('Для веб-поиска укажите API-ключ OpenRouter в настройках ИИ');
     var resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-      body: JSON.stringify({ model: model, messages: messages, stream: false, tools: [{ type: 'openrouter:web_search', parameters: { allowed_domains: opts.searchDomains, max_total_results: 8 } }], reasoning: { enabled: !!settings.reasoning }, max_tokens: opts.maxTokens || 8192 })
+      body: JSON.stringify({ model: model, messages: messages, stream: false, tools: [{ type: 'openrouter:web_search', parameters: { allowed_domains: opts.searchDomains, max_total_results: 8 } }], reasoning: { enabled: opts.reasoning === undefined ? !!settings.reasoning : !!opts.reasoning }, max_tokens: opts.maxTokens || 8192 })
     });
     if (!resp.ok) throw new Error('OpenRouter: ' + await resp.text());
     var data = await resp.json();
@@ -275,7 +277,7 @@
     var body = { model: model, messages: messages, stream: false, temperature: opts.temperature != null ? opts.temperature : 0.4 };
     body.max_tokens = opts.maxTokens || 8192;
     if (settings.provider === 'openai' && /^(o\d|gpt-5)/.test(model)) { body.max_completion_tokens = body.max_tokens; delete body.max_tokens; delete body.temperature; }
-    if (settings.provider === 'openrouter') body.reasoning = { enabled: !!settings.reasoning };
+    if (settings.provider === 'openrouter') body.reasoning = { enabled: opts.reasoning === undefined ? !!settings.reasoning : !!opts.reasoning };
     if (opts.thinking && settings.provider === 'deepseek') body.thinking = { type: 'enabled' };
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
@@ -404,14 +406,15 @@
 
   registerAction({
     id: 'ai-description',
-    label: 'Описание AI',
+    label: 'Сгенерировать AI',
     scope: 'card',
     needsUrl: false,
-    buildPrompt: function (ctx) {
-      var docPart = docContext ? ('\n\nКонтекст из документации:\n---\n' + relevantDoc(ctx.card) + '\n---') : '';
+    optionalUrl: true,
+    buildPrompt: function (ctx, inputs) {
+      var docPart = inputs.text ? '\nИсточник: ' + inputs.url + '\nТекст страницы:\n' + inputs.text : '\nИсточник не задан. Не утверждай, что сведения проверены по документации.';
       return [
         { role: 'system', content: 'Ты — продуктовый аналитик. Пиши лаконично.' },
-        { role: 'user', content: 'Карточка фичи:\n' + ctx.card + docPart + '\n\nНапиши описание этой фичи объёмом 2–3 коротких абзаца. Опиши суть и ценность, без воды. Верни только текст описания.' }
+        { role: 'user', content: 'Карточка фичи:\n' + ctx.card + docPart + '\n\nНапиши описание этой фичи. ' + (inputs.size === 'large' ? 'Подробно: 5–8 абзацев, до 12000 символов, назначение, возможности, сценарии и ограничения без выдуманных фактов.' : 'Объём 2–3 коротких абзаца, до 1800 символов.') + ' Верни только текст описания.' }
       ];
     },
     apply: function (result, ctx) {
@@ -598,7 +601,7 @@
   }
 
   function actionList(scope, nodeId) {
-    var list = actions.filter(function (a) { return a.scope === scope; });
+    var list = actions.filter(function (a) { return a.scope === scope && a.id !== 'fill-description'; });
     var body = overlayShell(scope === 'card' ? 'ИИ для карточки' : 'ИИ-инструменты');
 
     if (scope === 'card' && nodeId) {
@@ -638,6 +641,7 @@
   }
 
   function runView(action, scope, nodeId, body) {
+    if (action.id === 'fill-description') action = byActionId['ai-description'];
     loadDocContext();
     body.innerHTML = '';
     var language = languagePicker(body);
@@ -649,14 +653,23 @@
 
     var title = document.createElement('h4'); title.className = 'ai-run-title'; title.textContent = action.label;
     body.appendChild(title);
+    var sizeInput, reasoningInput, searchInput;
+    if (action.id === 'ai-description') {
+      var sizeLabel = document.createElement('label'); sizeLabel.textContent = 'Размер описания'; body.appendChild(sizeLabel);
+      sizeInput = document.createElement('select'); sizeInput.className = 'modal-select';
+      [['small', 'Маленькое — 2–3 абзаца'], ['large', 'Большое — 5–8 абзацев']].forEach(function (v) { var o = document.createElement('option'); o.value = v[0]; o.textContent = v[1]; sizeInput.appendChild(o); }); body.appendChild(sizeInput);
+      function toggle(label, checked) { var wrap = document.createElement('label'); wrap.className = 'ai-check'; var input = document.createElement('input'); input.type = 'checkbox'; input.checked = checked; wrap.appendChild(input); var text = document.createElement('span'); text.textContent = label; wrap.appendChild(text); body.appendChild(wrap); return input; }
+      reasoningInput = toggle('Ризонинг', !!settings.reasoning);
+      searchInput = toggle('Веб-поиск (требует настроенного поиска OpenRouter)', !!settings.webSearch);
+    }
 
     var urlInput = null;
-    if (action.needsUrl) {
-      var lbl = document.createElement('label'); lbl.className = 'ai-label'; lbl.textContent = 'Ссылка для анализа';
+    if (action.needsUrl || action.optionalUrl) {
+      var lbl = document.createElement('label'); lbl.className = 'ai-label'; lbl.textContent = action.optionalUrl ? 'Ссылка (необязательно; пусто — ответ модели без чтения документации)' : 'Ссылка для анализа';
       body.appendChild(lbl);
       urlInput = document.createElement('input'); urlInput.type = 'url'; urlInput.className = 'modal-input ai-url'; urlInput.placeholder = 'https://…';
       body.appendChild(urlInput);
-      var draftKey = docKey() + ':input:' + (action.id === 'analyze-docs' || action.id === 'fill-description' ? 'documentation' : action.id);
+      var draftKey = docKey() + ':input:' + (action.id === 'analyze-docs' || action.id === 'ai-description' ? 'documentation' : action.id);
       var draft = {};
       try { draft = JSON.parse(localStorage.getItem(draftKey) || '{}'); } catch (_) {}
       urlInput.value = typeof draft.url === 'string' ? draft.url : (action.id === 'analyze-docs' || action.id === 'fill-description') && docContext ? docContext.url || '' : '';
@@ -702,24 +715,25 @@
     body.appendChild(row);
 
     var lastResult = '';
+    var resultSize = 'small';
     var targetMapId = state.mapId;
 
     run.addEventListener('click', async function () {
       var epoch = taskEpoch, mapId = state.mapId;
-      if (action.needsUrl) {
+      if (action.needsUrl || (urlInput && urlInput.value.trim())) {
         var u = (urlInput.value || '').trim();
         if (!/^https?:\/\//i.test(u)) { showToast('Введите корректную ссылку', 'error'); urlInput.focus(); return; }
       }
       run.disabled = true; run.textContent = '⏳ Загружаю…';
       out.textContent = '';
       try {
-        var inputs = {};
+        var inputs = { size: sizeInput ? sizeInput.value : 'small' };
         if (action.id === 'analyze-docs') {
           if (!productInput.value.trim()) throw new Error('Укажите продукт и версию для точного поиска');
           saveDocContext({ url: urlInput.value.trim(), product: productInput.value.trim(), title: productInput.value.trim(), text: '' });
           inputs.text = 'Поиск документации: ' + productInput.value.trim();
         }
-        if (action.needsUrl && action.id !== 'analyze-docs') {
+        if (urlInput && urlInput.value.trim() && action.id !== 'analyze-docs') {
           inputs.url = (urlInput.value || '').trim();
           var page = await fetchUrl(inputs.url);
           if (epoch !== taskEpoch || state.mapId !== mapId) throw new Error('Задача отменена');
@@ -735,9 +749,12 @@
           ctx.card = Array.from(branchIds).map(function (id) { return nodeToText(getNodeById(id)); }).join('\n');
         }
         var prompt = action.buildPrompt(ctx, Object.assign({}, inputs, { text: (inputs.text || '').slice(0, 40000) }));
-        var result = await complete(prompt, { language: language.value, docQuery: action.id === 'analyze-docs' ? productInput.value.trim() + ': возможности и ограничения' : action.label + '\n' + (ctx.card || ctx.board).slice(0, 12000) });
+        var requestOptions = { language: language.value, docQuery: action.id === 'analyze-docs' ? productInput.value.trim() + ': возможности и ограничения' : action.label + '\n' + (ctx.card || ctx.board).slice(0, 12000) };
+        if (sizeInput) { requestOptions.docQuery = ''; requestOptions.reasoning = reasoningInput.checked; requestOptions.webSearch = searchInput.checked; requestOptions.maxTokens = inputs.size === 'large' ? 6000 : 3072; }
+        var result = await complete(prompt, requestOptions);
         if (epoch !== taskEpoch || state.mapId !== mapId) throw new Error('Задача отменена');
         lastResult = result;
+        resultSize = inputs.size;
         var sources = lastSources.map(function (a) { return a.url_citation && a.url_citation.url; }).filter(Boolean);
         out.textContent = result + (sources.length ? '\n\nИсточники:\n' + Array.from(new Set(sources)).join('\n') : '') + '\n\nПоиск не гарантирует полноту документации; отсутствие результата не означает отсутствие функции.';
         if (apply) apply.style.display = '';
@@ -753,7 +770,7 @@
 
     if (apply) apply.addEventListener('click', async function () {
       if (state.mapId !== targetMapId) { showToast('Таблица изменилась', 'error'); return; }
-      try { await action.apply(lastResult, { nodeId: nodeId }); }
+      try { await action.apply(lastResult, { nodeId: nodeId, size: resultSize }); }
       catch (e) { showToast(e.message, 'error'); }
     });
     copy.addEventListener('click', function () {
@@ -766,7 +783,7 @@
   function openPanel(scope, nodeId, actionId) {
     loadDocContext();
     scope = scope || 'board';
-    var list = actions.filter(function (a) { return a.scope === scope; });
+    var list = actions.filter(function (a) { return a.scope === scope && a.id !== 'fill-description'; });
     if (!list.length) { showToast('Нет ИИ-действий для этого контекста', 'info'); return; }
     if (actionId && byActionId[actionId]) {
       var body = overlayShell(scope === 'card' ? 'ИИ для карточки' : 'ИИ-инструменты');
@@ -777,6 +794,7 @@
   }
 
   function openCardMenu(anchor, nodeId) {
+    nodeId = nodeId || anchor;
     // Открываем панель с карточными действиями (модалка, не вложенное меню).
     openPanel('card', nodeId);
   }
@@ -916,7 +934,7 @@
       var btn = document.createElement('button');
       btn.type = 'button'; btn.id = 'aiFillNoteBtn';
       btn.className = 'btn btn-secondary btn-sm ai-fill-note';
-      btn.textContent = '✨ Заполнить по ссылке';
+      btn.textContent = 'Сгенерировать AI';
       btn.addEventListener('click', function () { if (state.editingNodeId) fillDescriptionFromUrl(state.editingNodeId); });
       noteEl.insertAdjacentElement('afterend', btn);
     }

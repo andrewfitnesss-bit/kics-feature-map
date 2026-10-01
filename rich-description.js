@@ -125,7 +125,7 @@
       if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); if (e.target.closest('li')) command('indent'); else command('insertText', '\t'); }
     });
     document.getElementById('modal').addEventListener('keydown', function(e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveModal(); } });
-    document.getElementById('descriptionExpand').onclick = function () { document.getElementById('modal').classList.toggle('description-expanded'); };
+    document.getElementById('descriptionExpand').onclick = function () { var modal = document.getElementById('modal'); modal.style.width = 'min(1240px,96vw)'; modal.style.height = '94vh'; };
   }
   var originalOpen = openModal, originalSave = saveModal, originalClose = closeModal, originalView = openCardView;
   openModal = function (id) {
